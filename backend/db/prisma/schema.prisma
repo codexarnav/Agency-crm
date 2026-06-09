@@ -1,0 +1,656 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  SUPER_ADMIN
+  MANAGER
+  EMPLOYEE
+}
+
+enum Platform {
+  INSTAGRAM
+  FACEBOOK
+  WHATSAPP
+  TWITTER
+  LINKEDIN
+  PINTEREST
+  GOOGLE_ADS
+  SNAPCHAT
+  WHATSAPP_BUSINESS
+  YOUTUBE
+}
+
+enum ContentType {
+  REEL
+  SHORT
+  STATIC_POST
+  CAROUSEL
+  STORY
+  YOUTUBE_VIDEO
+  THUMBNAIL
+  CAPTION
+  CONTENT_IDEA
+  SCRIPT
+  AD_CREATIVE
+  BLOG_POST
+}
+
+enum ProductionStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  CHANGES_NEEDED
+  BLOCKED
+  COMPLETED
+}
+
+enum ApprovalStatus {
+  PENDING
+  MANAGER_APPROVED
+  SENT_TO_CLIENT
+  CLIENT_APPROVED
+  CHANGES_REQUIRED
+  FINAL_APPROVED
+}
+
+enum PublishingStatus {
+  DRAFT
+  SCHEDULED
+  POSTING
+  POSTED
+  FAILED
+  CANCELLED
+  NOT_SCHEDULED
+  FAILED_TO_POST
+  RESCHEDULED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum AnnouncementPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_COMPLETED
+  TASK_APPROVED
+  TASK_REJECTED
+
+  CLIENT_CREATED
+  CLIENT_UPDATED
+
+  EMPLOYEE_CREATED
+
+  ANNOUNCEMENT
+
+  REPORT_GENERATED
+
+  SYSTEM
+
+  SHOOT_BRIEF_ASSIGNED
+  SHOOT_SCRIPT_SUBMITTED
+  SHOOT_SCRIPT_APPROVED
+  SHOOT_SCRIPT_CHANGES_REQUESTED
+  SHOOT_CREW_ASSIGNED
+  SHOOT_SCHEDULED
+  SHOOT_STARTED
+  SHOOT_RAW_UPLOADED
+  SHOOT_EDITING_TASKS_GENERATED
+
+  PUBLISHING_SCHEDULED
+  PUBLISHING_RESCHEDULED
+  PUBLISHING_CANCELLED
+}
+
+enum ReportStatus {
+  DRAFT
+  GENERATED
+  SENT_TO_CLIENT
+  APPROVED
+}
+
+enum AvailabilityStatus {
+  AVAILABLE
+  ON_LEAVE
+  SICK_LEAVE
+  REMOTE
+  HALF_DAY
+  TRAINING
+}
+
+model Company {
+  id            String   @id @default(uuid())
+
+  name          String
+  email         String
+
+  phoneNumber   String?
+  website       String?
+
+  industryType  String?
+  employeeCount Int?
+
+  address       String?
+  gstId         String?
+
+  companyLogo   String?
+  timezone      String?
+
+  permissions             Json?
+  publishingConnections   Json?
+  notificationPreferences Json?
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  users         User[]
+  clients       Client[]
+
+  tasks         Task[]
+  announcements Announcement[]
+  reports       Report[]
+  availability  EmployeeAvailability[]
+  shoots        Shoot[]
+  publishingJobs PublishingJob[]
+}
+
+model User {
+  id             String @id @default(uuid())
+
+  companyId      String
+  company        Company @relation(fields: [companyId], references: [id])
+
+  managerId      String?
+
+  manager        User? @relation("ManagerEmployees", fields: [managerId], references: [id])
+  employees      User[] @relation("ManagerEmployees")
+
+  username       String
+
+  email          String
+
+  phoneNumber    String?
+
+  passwordHash   String
+
+  role           Role
+
+  profilePicture String?
+
+  designation    String?
+  department     String?
+  skills         String[] @default([])
+  availability   String?  @default("available")
+  notes          String?
+
+  isActive       Boolean @default(true)
+
+  lastLogin      DateTime?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  managedTasks          Task[]                 @relation("ManagerTasks")
+  assignedTasks         Task[]                 @relation("EmployeeTasks")
+  announcementsCreated  Announcement[]         @relation("UserAnnouncements")
+  reportsCreated        Report[]               @relation("ManagerReports")
+  sentNotifications     Notification[]         @relation("SentNotifications")
+  receivedNotifications Notification[]         @relation("ReceivedNotifications")
+  availabilityRecords   EmployeeAvailability[] @relation("EmployeeAvailability")
+  availabilityCreated   EmployeeAvailability[] @relation("AvailabilityCreatedBy")
+
+  managedShoots         Shoot[]                @relation("ManagerShoots")
+  leadShoots            Shoot[]                @relation("CreativeLeadShoots")
+  shootScripts          ShootScript[]          @relation("EmployeeScripts")
+  shootCrews            ShootCrew[]            @relation("EmployeeCrew")
+  uploadedAssets        ShootAsset[]           @relation("UploadedAssets")
+  publishingJobs         PublishingJob[]        @relation("ManagerPublishingJobs")
+  managedClients        Client[]               @relation("ManagerClients")
+
+  @@unique([email, companyId])
+}
+
+model Client {
+  id             String @id @default(uuid())
+
+  companyId      String
+  company        Company @relation(fields: [companyId], references: [id])
+
+  username       String
+
+  companyName    String
+
+  email          String
+
+  phoneNumber    String?
+
+  passwordHash   String @default("")
+
+  profilePicture String?
+
+  isActive       Boolean @default(true)
+
+  managerId      String?
+  manager        User?    @relation("ManagerClients", fields: [managerId], references: [id])
+
+  // -- CRM Business Fields --
+  brandColor          String?
+  brandName           String?
+  industry            String?
+  contactPerson       String?
+  assignedAM          String?
+  assignedManager     String?
+  monthlyDeliverables Int       @default(30)
+  deliverableBreakdown Json?
+  startDate           DateTime?
+  renewalDate         DateTime?
+  status              String     @default("active")
+  platforms           String[]   @default([])
+  notes               String?
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tasks          Task[]
+  reports        Report[]
+  asset          Asset?
+  shoots         Shoot[]
+  publishingJobs PublishingJob[]
+
+  @@unique([email, companyId])
+}
+
+model Task {
+  id String @id @default(uuid())
+
+  companyId  String
+  company    Company @relation(fields: [companyId], references: [id])
+
+  clientId   String
+  client     Client @relation(fields: [clientId], references: [id])
+
+  managerId  String
+  manager    User @relation("ManagerTasks", fields: [managerId], references: [id])
+
+  employeeId String?
+  employee   User? @relation("EmployeeTasks", fields: [employeeId], references: [id])
+
+  title String
+
+  description String?
+
+  platform Platform
+
+  contentType ContentType
+
+  productionStatus ProductionStatus
+
+  approvalStatus ApprovalStatus
+
+  publishingStatus PublishingStatus
+
+  priority Priority
+
+  contentLink String?
+
+  dueDate DateTime?
+
+  scheduleDateTime DateTime?
+
+  approvalComment   String?
+  approvalUpdatedAt DateTime?
+
+  planMonth        String?  
+  postingDate      DateTime?  
+  day              String?   
+  captionCopy      String?   
+  managerNotes     String?   
+  clientFeedback   String?   
+  revisionCount    Int        @default(0)
+  maxRevisions     Int        @default(2)
+  progress         Int        @default(0)
+  assignmentType   String     @default("manual")
+  clientName       String?    
+  assignedToName   String?    
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+  revisions Revision[]
+  publishingJobs PublishingJob[]
+}
+
+model Announcement {
+  id String @id @default(uuid())
+
+  companyId   String
+  company     Company @relation(fields: [companyId], references: [id])
+
+  createdById String
+  createdBy   User @relation("UserAnnouncements", fields: [createdById], references: [id])
+
+  title String
+
+  content String
+
+  priority AnnouncementPriority
+
+  announcementDate DateTime
+
+  expiresAt DateTime?
+
+  audience String @default("everyone")
+  specificClientId String?
+  specificEmployeeId String?
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+}
+
+model Asset {
+  id String @id @default(uuid())
+
+  clientId String @unique
+  client Client @relation(fields: [clientId], references: [id])
+
+  clientLogo String?
+
+  brandColor String?
+
+  fonts String?
+
+  tone String?
+
+  hashtags String?
+
+  guidelines String?
+
+  dosAndDonts String?
+
+  driveLink String?
+
+  canvaLink String?
+
+  creativeLink String?
+
+  competitorReference String?
+
+  referenceLinks String?
+
+  brandNotes String?
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id String @id @default(uuid())
+
+  senderId   String
+  sender     User @relation("SentNotifications", fields: [senderId], references: [id])
+
+  receiverId String
+  receiver   User @relation("ReceivedNotifications", fields: [receiverId], references: [id])
+
+  content String
+
+  type NotificationType
+
+  isRead Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+}
+
+model Report {
+  id String @id @default(uuid())
+
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  managerId String
+  manager   User @relation("ManagerReports", fields: [managerId], references: [id])
+
+  clientId  String
+  client    Client @relation(fields: [clientId], references: [id])
+
+  content String?
+
+  reportMonth DateTime
+
+  platform Platform
+
+  status ReportStatus
+
+  reportUrl String?
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+}
+
+model EmployeeAvailability {
+  id String @id @default(uuid())
+
+  companyId  String
+  company    Company @relation(fields: [companyId], references: [id])
+
+  employeeId String
+  employee   User @relation("EmployeeAvailability", fields: [employeeId], references: [id])
+
+  status AvailabilityStatus
+
+  date DateTime
+
+  reason String?
+
+  notes String?
+
+  createdById String
+  createdBy   User @relation("AvailabilityCreatedBy", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+}
+
+model ActivityLog {
+  id         String   @id @default(uuid())
+  action     String
+  entityType String
+  entityId   String?
+  userId     String
+  details    Json?
+  timestamp  DateTime @default(now())
+}
+
+model Revision {
+  id                 String   @id @default(uuid())
+  taskId             String
+  task               Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  feedbackBy         String
+  feedbackComment    String
+  updatedContentLink String?
+  createdAt          DateTime @default(now())
+}
+
+model Shoot {
+  id               String        @id @default(uuid())
+  companyId        String
+  company          Company       @relation(fields: [companyId], references: [id])
+  clientId         String
+  client           Client        @relation(fields: [clientId], references: [id])
+  managerId        String
+  manager          User          @relation("ManagerShoots", fields: [managerId], references: [id])
+  creativeLeadId   String
+  creativeLead     User          @relation("CreativeLeadShoots", fields: [creativeLeadId], references: [id])
+  
+  title            String
+  objective        String?
+  deliverables     String?
+  targetAudience   String?
+  priority         ShootPriority
+  status           ShootStatus
+  expectedDeadline DateTime?
+  shootDate        DateTime?
+  shootTime        String?
+  location         String?
+  clientContact    String?
+  notes            String?
+  shootDraftUrl    String?
+  
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  
+  scripts          ShootScript[]
+  crew             ShootCrew[]
+  assets           ShootAsset[]
+  publishingJobs   PublishingJob[]
+}
+
+model ShootScript {
+  id              String            @id @default(uuid())
+  shootId         String
+  shoot           Shoot             @relation(fields: [shootId], references: [id], onDelete: Cascade)
+  employeeId      String
+  employee        User              @relation("EmployeeScripts", fields: [employeeId], references: [id])
+  
+  hook            String?
+  script          String?
+  voiceover       String?
+  cta             String?
+  references      String?
+  status          ShootScriptStatus
+  managerFeedback String?
+  submittedAt     DateTime?
+  scriptFileUrl   String?
+  
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model ShootCrew {
+  id         String        @id @default(uuid())
+  shootId    String
+  shoot      Shoot         @relation(fields: [shootId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   User          @relation("EmployeeCrew", fields: [employeeId], references: [id])
+  role       ShootCrewRole
+  
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+}
+
+model ShootAsset {
+  id         String         @id @default(uuid())
+  shootId    String
+  shoot      Shoot          @relation(fields: [shootId], references: [id], onDelete: Cascade)
+  assetUrl   String
+  assetType  ShootAssetType
+  uploadedBy String?
+  uploader   User?          @relation("UploadedAssets", fields: [uploadedBy], references: [id])
+  
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+}
+
+enum ShootStatus {
+  BRIEF_CREATED
+  SCRIPT_PENDING
+  SCRIPT_SUBMITTED
+  SCRIPT_APPROVED
+  SCRIPT_CHANGES_REQUESTED
+  CREW_ASSIGNED
+  SCHEDULED
+  IN_PROGRESS
+  RAW_UPLOADED
+  EDITING
+  READY_FOR_REVIEW
+  CLIENT_APPROVAL
+  PUBLISHED
+  COMPLETED
+  CANCELLED
+}
+
+enum ShootPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ShootScriptStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  CHANGES_REQUESTED
+}
+
+enum ShootCrewRole {
+  VIDEOGRAPHER
+  PHOTOGRAPHER
+  EDITOR
+  ASSISTANT
+}
+
+enum ShootAssetType {
+  RAW
+  EDITED
+  FINAL
+  BTS
+}
+
+model PublishingJob {
+  id String @id @default(uuid())
+
+  companyId String
+  company Company @relation(fields: [companyId], references: [id])
+
+  clientId String
+  client Client @relation(fields: [clientId], references: [id])
+
+  managerId String
+  manager User @relation("ManagerPublishingJobs", fields: [managerId], references: [id])
+
+  taskId String?
+  task Task? @relation(fields: [taskId], references: [id])
+
+  shootId String?
+  shoot Shoot? @relation(fields: [shootId], references: [id])
+
+  platform Platform
+
+  caption String?
+
+  mediaUrls String
+
+  scheduledAt DateTime
+
+  publishedAt DateTime?
+
+  status PublishingStatus @default(SCHEDULED)
+
+  failureReason String?
+
+  externalPostId String?
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+}

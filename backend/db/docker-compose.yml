@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16
+
+    container_name: agencyflow-db
+
+    restart: always
+
+    environment:
+      POSTGRES_DB: agencyflow
+      POSTGRES_USER: agencyflow_user
+      POSTGRES_PASSWORD: yourStrongPassword123
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  adminer:
+    image: adminer
+
+    container_name: agencyflow-adminer
+
+    restart: always
+
+    ports:
+      - "8080:8080"
+
+volumes:
+  postgres_data:
