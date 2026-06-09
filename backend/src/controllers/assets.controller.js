@@ -1,6 +1,6 @@
 import {
     uploadToCloudinary
-} from "../../utils/uploadtocloudinary.js";
+} from "../../utils/uploadToCloudinary.js";
 
 import {
     createOrUpdateAsset,
