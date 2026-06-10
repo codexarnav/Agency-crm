@@ -153,8 +153,11 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
     const e = {};
     if (!form.name.trim()) e.name = "Client name is required";
     if (!form.contactPerson.trim()) e.contactPerson = "Contact person is required";
+    if (form.email && form.email.trim() && !/\S+@\S+\.\S+/.test(form.email)) {
+      e.email = "Enter a valid email address";
+    }
     setErrors(e);
-    if (e.name || e.contactPerson) {
+    if (e.name || e.contactPerson || e.email) {
       setActiveTab("profile");
     }
     return Object.keys(e).length === 0;
@@ -164,14 +167,20 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
     if (!validate()) return;
     const monthlyTotal = Object.values(form.deliverableBreakdown?.monthly || {}).reduce((a, b) => a + (parseInt(b) || 0), 0);
     
-    let emailVal = form.email;
+    let emailVal = form.email ? form.email.trim() : "";
     let usernameVal = form.username;
     
     if (!initial) {
       const cleanName = (form.name || "client").toLowerCase().replace(/[^a-z0-9]/g, "");
       const suffix = Math.floor(100 + Math.random() * 900);
       usernameVal = `${cleanName}_${suffix}`;
-      emailVal = `${usernameVal}@agencyclient.com`;
+      if (!emailVal) {
+        emailVal = `${usernameVal}@agencyclient.com`;
+      }
+    } else if (initial && !emailVal) {
+      const cleanName = (form.name || "client").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const suffix = Math.floor(100 + Math.random() * 900);
+      emailVal = `${cleanName}_${suffix}@agencyclient.com`;
     }
 
     const finalForm = {
@@ -291,6 +300,7 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
               <FormInput label="Contact Person Name *" value={form.contactPerson} onChange={e => set("contactPerson", e.target.value)} placeholder="Primary point of contact" error={errors.contactPerson} />
             </div>
             <div className="grid-2">
+              <FormInput label="Contact Email" type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="client@company.com" error={errors.email} />
               <FormInput label="Contact Phone" value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="+91 98000 00000" />
             </div>
           </div>
