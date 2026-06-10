@@ -23,7 +23,7 @@ const app = express();
 
 const allowedOrigins = [
     "http://localhost:5173",
-    process.env.FRONTEND_URL,
+    "https://agency-crm-k1n7.vercel.app/",
 ];
 
 app.use(
