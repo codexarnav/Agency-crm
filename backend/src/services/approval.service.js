@@ -52,7 +52,7 @@ export const getApprovalQueue = async (
     companyId
 ) => {
 
-    return await prisma.task.findMany({
+    const tasks = await prisma.task.findMany({
         where: {
             companyId,
         },
@@ -67,6 +67,33 @@ export const getApprovalQueue = async (
             createdAt: "desc",
         },
     });
+
+    const enhancedTasks = await Promise.all(
+        tasks.map(async (task) => {
+            if (task.description && task.description.includes("[Shoot Script ID:")) {
+                const match = task.description.match(/\[Shoot Script ID:\s*([a-fA-F0-9-]+)\]/);
+                if (match && match[1]) {
+                    const shootId = match[1];
+                    const shootScript = await prisma.shootScript.findFirst({
+                        where: {
+                            shootId: shootId,
+                            employeeId: task.employeeId || undefined,
+                        },
+                    });
+                    if (shootScript) {
+                        return {
+                            ...task,
+                            shootScript,
+                            contentLink: task.contentLink || shootScript.scriptFileUrl || null
+                        };
+                    }
+                }
+            }
+            return task;
+        })
+    );
+
+    return enhancedTasks;
 };
 
 export const managerApproveTask = async (

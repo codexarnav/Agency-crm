@@ -621,6 +621,7 @@ export const createScriptDraft = async (shootId, employeeId, data, fileBuffer) =
       where: { id: scriptTask.id },
       data: {
         productionStatus: "IN_PROGRESS",
+        contentLink: scriptFileUrl || undefined
       },
     });
   }
@@ -699,6 +700,7 @@ export const submitScript = async (shootId, employeeId, data, loggedInUser, file
       where: { id: scriptTask.id },
       data: {
         productionStatus: "REVIEW",
+        contentLink: scriptFileUrl || undefined
       },
     });
   }

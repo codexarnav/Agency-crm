@@ -213,6 +213,18 @@ function RevisionHistory({ task }) {
   );
 }
 
+function getCleanLinkLabel(url, taskType = "") {
+  if (!url) return "";
+  if (typeof url !== "string") return String(url);
+  if (url.includes("res.cloudinary.com")) {
+    if (taskType === "Script" || taskType === "SCRIPT" || taskType?.toLowerCase() === "script") {
+      return "Script Brief Document";
+    }
+    return "View Attached Content";
+  }
+  return url;
+}
+
 // ApprovalModal
 function ApprovalModal({ open, onClose, task, onAction, role }) {
   const { employees, session, showToast } = useApp();
@@ -338,13 +350,79 @@ function ApprovalModal({ open, onClose, task, onAction, role }) {
             <label style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 5, display: "block" }}>Content Link</label>
             {task.contentLink ? (
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <a href={task.contentLink} target="_blank" rel="noreferrer" style={{ flex: 1, padding: "9px 12px", background: "#F9FAFB", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, color: "var(--primary)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{task.contentLink}</a>
+                <a href={task.contentLink} target="_blank" rel="noreferrer" style={{ flex: 1, padding: "9px 12px", background: "#F9FAFB", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, color: "var(--primary)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{getCleanLinkLabel(task.contentLink, task.contentType)}</a>
                 <Btn variant="outline" size="sm" onClick={() => window.open(task.contentLink, "_blank")}>Open</Btn>
               </div>
             ) : (
               <div style={{ padding: "10px 12px", background: "#F9FAFB", border: "1.5px dashed var(--border)", borderRadius: 8, fontSize: 13, color: "var(--muted)" }}>No content link submitted yet</div>
             )}
           </div>
+
+          {/* Script Details */}
+          {task.shootScript && (
+            <div style={{ marginBottom: 14, border: "1px solid var(--border)", borderRadius: 8, padding: 12, background: "#FDFDFD" }}>
+              <div style={{ fontWeight: 700, fontSize: 12.5, color: "var(--primary)", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Script Details
+              </div>
+              
+              {task.shootScript.hook && (
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Hook</label>
+                  <div style={{ fontSize: 12.5, background: "#F9FAFB", padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border)", whiteSpace: "pre-wrap" }}>
+                    {task.shootScript.hook}
+                  </div>
+                </div>
+              )}
+
+              {task.shootScript.script && (
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Script Content</label>
+                  <div style={{ fontSize: 12.5, background: "#F9FAFB", padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border)", whiteSpace: "pre-wrap" }}>
+                    {task.shootScript.script}
+                  </div>
+                </div>
+              )}
+
+              {task.shootScript.voiceover && (
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Voiceover / Copy</label>
+                  <div style={{ fontSize: 12.5, background: "#F9FAFB", padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border)", whiteSpace: "pre-wrap" }}>
+                    {task.shootScript.voiceover}
+                  </div>
+                </div>
+              )}
+
+              {task.shootScript.cta && (
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Call to Action (CTA)</label>
+                  <div style={{ fontSize: 12.5, background: "#F9FAFB", padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border)", whiteSpace: "pre-wrap" }}>
+                    {task.shootScript.cta}
+                  </div>
+                </div>
+              )}
+
+              {task.shootScript.references && (
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>References / Links</label>
+                  <div style={{ fontSize: 12.5, background: "#F9FAFB", padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border)", whiteSpace: "pre-wrap" }}>
+                    {task.shootScript.references}
+                  </div>
+                </div>
+              )}
+
+              {task.shootScript.scriptFileUrl && (
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Uploaded Script File</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <a href={task.shootScript.scriptFileUrl} target="_blank" rel="noreferrer" style={{ flex: 1, padding: "7px 10px", background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: 6, fontSize: 12, color: "var(--primary)", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      Script Brief Document
+                    </a>
+                    <Btn variant="outline" size="sm" onClick={() => window.open(task.shootScript.scriptFileUrl, "_blank")}>Open</Btn>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Caption copy */}
           {task.captionCopy && (
@@ -473,6 +551,72 @@ function ClientApprovalModal({ open, onClose, task, onAction }) {
           ) : (
             <div style={{ marginBottom: 14, padding: "10px 12px", background: "#F9FAFB", border: "1.5px dashed var(--border)", borderRadius: 8, fontSize: 13, color: "var(--muted)" }}>
               Content file not yet uploaded.
+            </div>
+          )}
+
+          {/* Script Details */}
+          {task.shootScript && (
+            <div style={{ marginBottom: 14, border: "1px solid var(--border)", borderRadius: 8, padding: 12, background: "#FDFDFD" }}>
+              <div style={{ fontWeight: 700, fontSize: 12.5, color: "var(--primary)", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                Script Details
+              </div>
+              
+              {task.shootScript.hook && (
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Hook</label>
+                  <div style={{ fontSize: 12.5, background: "#F9FAFB", padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border)", whiteSpace: "pre-wrap" }}>
+                    {task.shootScript.hook}
+                  </div>
+                </div>
+              )}
+
+              {task.shootScript.script && (
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Script Content</label>
+                  <div style={{ fontSize: 12.5, background: "#F9FAFB", padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border)", whiteSpace: "pre-wrap" }}>
+                    {task.shootScript.script}
+                  </div>
+                </div>
+              )}
+
+              {task.shootScript.voiceover && (
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Voiceover / Copy</label>
+                  <div style={{ fontSize: 12.5, background: "#F9FAFB", padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border)", whiteSpace: "pre-wrap" }}>
+                    {task.shootScript.voiceover}
+                  </div>
+                </div>
+              )}
+
+              {task.shootScript.cta && (
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Call to Action (CTA)</label>
+                  <div style={{ fontSize: 12.5, background: "#F9FAFB", padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border)", whiteSpace: "pre-wrap" }}>
+                    {task.shootScript.cta}
+                  </div>
+                </div>
+              )}
+
+              {task.shootScript.references && (
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>References / Links</label>
+                  <div style={{ fontSize: 12.5, background: "#F9FAFB", padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border)", whiteSpace: "pre-wrap" }}>
+                    {task.shootScript.references}
+                  </div>
+                </div>
+              )}
+
+              {task.shootScript.scriptFileUrl && (
+                <div>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", display: "block", marginBottom: 2 }}>Uploaded Script File</label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <a href={task.shootScript.scriptFileUrl} target="_blank" rel="noreferrer" style={{ flex: 1, padding: "7px 10px", background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: 6, fontSize: 12, color: "var(--primary)", fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      Script Brief Document
+                    </a>
+                    <Btn variant="outline" size="sm" onClick={() => window.open(task.shootScript.scriptFileUrl, "_blank")}>Open</Btn>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

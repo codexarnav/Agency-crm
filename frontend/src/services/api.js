@@ -19,7 +19,7 @@ export function removeToken() {
 // ── Generic fetch wrapper with centralized error handling ───
 async function request(method, path, body = null) {
   const headers = {};
-  
+
   // Only set application/json for non-FormData payloads
   if (!(body instanceof FormData)) {
     headers["Content-Type"] = "application/json";

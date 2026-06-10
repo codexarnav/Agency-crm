@@ -252,7 +252,7 @@ function MonthlyPlannerPage() {
                     <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 120 }}>
                       <select value={row.assignedEmployeeId} onChange={e => upd(row.id, "assignedEmployeeId", e.target.value)} style={{ flex: 1, padding: "5px 6px", border: "1.5px solid transparent", borderRadius: 6, fontSize: 12, fontFamily: "'DM Sans',sans-serif", background: "transparent", outline: "none", cursor: "pointer", minWidth: 80 }} onFocus={e => { e.target.style.borderColor = "#FF6A00"; e.target.style.background = "#fff"; }} onBlur={e => { e.target.style.borderColor = "transparent"; e.target.style.background = "transparent"; }}>
                         <option value=""> - </option>
-                        {employees.map(e => <option key={e.id} value={e.id}>{e.name.split(" ")[0]}</option>)}
+                        {employees.map(e => <option key={e.id} value={e.id}>{(e.name || e.username || "").split(" ")[0]}</option>)}
                       </select>
                       {row.assignmentType === "ai_assigned" && <span style={{ fontSize: 10, background: "#EDE9FE", color: "#5B21B6", padding: "1px 5px", borderRadius: 4, fontWeight: 700, flexShrink: 0 }}>AI</span>}
                     </div>

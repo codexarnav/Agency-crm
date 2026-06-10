@@ -79,4 +79,22 @@ app.use("/api/revisions", revisionRoutes);
 app.use("/api/shoots", shootRoutes);
 app.use("/api/publishing", publishingRoutes);
 app.use("/api/settings", settingsRoutes);
+
+// Global Error Handler
+app.use((err, req, res, next) => {
+    console.error("❌ Error handled by global handler:", err);
+
+    if (err.name === 'MulterError' || err.message.startsWith('file type not supported')) {
+        return res.status(400).json({
+            success: false,
+            message: err.message
+        });
+    }
+
+    res.status(err.status || 500).json({
+        success: false,
+        message: err.message || "Internal Server Error"
+    });
+});
+
 export default app;

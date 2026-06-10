@@ -178,8 +178,8 @@ function ApprovalsPage() {
                     <PrioMBadge s={t.priority} />
                     {emp && (
                       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <Avatar name={emp.name} size={22} />
-                        <span style={{ fontSize: 12, color: "var(--muted)" }}>{emp.name.split(" ")[0]}</span>
+                        <Avatar name={emp.name || emp.username} size={22} />
+                        <span style={{ fontSize: 12, color: "var(--muted)" }}>{(emp.name || emp.username || "").split(" ")[0]}</span>
                       </div>
                     )}
                     {isOverdue && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--danger)" }}>! Overdue</span>}

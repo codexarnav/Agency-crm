@@ -202,7 +202,7 @@ function EmployeeAvailabilityPage() {
                     {dayRecs.slice(0, 3).map(r => {
                       const emp = employees.find(e => e.id === r.employeeId);
                       const m = availMeta(r.status);
-                      return <div key={r.id} title={`${emp?.name}: ${m.label}`} style={{ marginTop: 2, padding: "2px 5px", borderRadius: 4, fontSize: 10, fontWeight: 700, background: m.bg, color: m.color, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{emp?.name?.split(" ")[0]}: {m.label}</div>;
+                      return <div key={r.id} title={`${emp?.name || emp?.username || ""}: ${m.label}`} style={{ marginTop: 2, padding: "2px 5px", borderRadius: 4, fontSize: 10, fontWeight: 700, background: m.bg, color: m.color, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{(emp?.name || emp?.username || "").split(" ")[0]}: {m.label}</div>;
                     })}
                     {dayRecs.length > 3 && <div style={{ fontSize: 10, color: "var(--muted)", paddingLeft: 3 }}>+{dayRecs.length - 3}</div>}
                   </div>

@@ -555,7 +555,7 @@ function ClientsPage() {
               {
                 key: "assignedAM", label: "Account Mgr", hideOnMobile: true, render: v => {
                   const emp = employees.find(e => e.id === v);
-                  return emp ? <div style={{ display: "flex", alignItems: "center", gap: 6 }}><Avatar name={emp.name} size="sm" /><span style={{ fontSize: 12.5 }}>{emp.name.split(" ")[0]}</span></div> : <span style={{ fontSize: 12.5, color: "var(--muted)" }}> - </span>;
+                  return emp ? <div style={{ display: "flex", alignItems: "center", gap: 6 }}><Avatar name={emp.name || emp.username} size="sm" /><span style={{ fontSize: 12.5 }}>{(emp.name || emp.username || "").split(" ")[0]}</span></div> : <span style={{ fontSize: 12.5, color: "var(--muted)" }}> - </span>;
                 }
               },
               { key: "status", label: "Status", render: v => { const m = clientStatusMeta(v); return <span className={`badge ${m.cls}`}><span className="dot" style={{ width: 6, height: 6, background: m.dot }} />{m.label}</span>; } },
@@ -614,7 +614,7 @@ function ClientsPage() {
                   <ProgressBar value={capproved} max={parseInt(c.monthlyDeliverables) || 30} height={4} />
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  {emp ? <div style={{ display: "flex", alignItems: "center", gap: 5 }}><Avatar name={emp.name} size="sm" /><span style={{ fontSize: 11.5, color: "var(--muted)" }}>{emp.name.split(" ")[0]}</span></div> : <span />}
+                  {emp ? <div style={{ display: "flex", alignItems: "center", gap: 5 }}><Avatar name={emp.name || emp.username} size="sm" /><span style={{ fontSize: 11.5, color: "var(--muted)" }}>{(emp.name || emp.username || "").split(" ")[0]}</span></div> : <span />}
                   {cpending > 0 && <span className="badge badge-warning" style={{ fontSize: 10.5, display: "flex", alignItems: "center", gap: 3 }}><SvgIcon name="clock" size={10} color="#854D0E" />{cpending} pending</span>}
                 </div>
               </div>

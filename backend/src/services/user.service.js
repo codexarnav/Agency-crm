@@ -134,7 +134,7 @@ export const CreateEmployee = async (
 };
 
 export const ListManagers = async (loggedInUser) => {
-    return await prisma.user.findMany({
+    const managers = await prisma.user.findMany({
         where: {
             companyId: loggedInUser.companyId,
             role: "MANAGER",
@@ -155,6 +155,10 @@ export const ListManagers = async (loggedInUser) => {
         },
         orderBy: { createdAt: "desc" },
     });
+    return managers.map(mgr => ({
+        ...mgr,
+        name: mgr.username
+    }));
 };
 
 export const ListEmployees = async (loggedInUser) => {
@@ -165,7 +169,7 @@ export const ListEmployees = async (loggedInUser) => {
     if (loggedInUser.role === "MANAGER") {
         whereClause.managerId = loggedInUser.id;
     }
-    return await prisma.user.findMany({
+    const employees = await prisma.user.findMany({
         where: whereClause,
         select: {
             id: true,
@@ -184,6 +188,10 @@ export const ListEmployees = async (loggedInUser) => {
         },
         orderBy: { createdAt: "desc" },
     });
+    return employees.map(emp => ({
+        ...emp,
+        name: emp.username
+    }));
 };
 
 export const UpdateUser = async (id, data, loggedInUser) => {

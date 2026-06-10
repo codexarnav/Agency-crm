@@ -112,13 +112,15 @@ function StatusBadge({ status }) {
 }
 
 // Avatar
-function Avatar({ name = "", size = "md", color = "#FF6A00", className = "" }) {
-  const initials = name.split(" ").slice(0, 2).map(w => w[0]).join("").toUpperCase();
+function Avatar({ name, size = "md", color = "#FF6A00", className = "" }) {
+  const safeName = name || "";
+  const initials = safeName.split(" ").slice(0, 2).map(w => w[0] || "").join("").toUpperCase();
   const colors = ["#FF6A00", "#7C3AED", "#16A34A", "#0EA5E9", "#F59E0B", "#EC4899", "#06B6D4", "#84CC16"];
-  const bg = colors[name.charCodeAt(0) % colors.length] || color;
+  const charCode = safeName.charCodeAt(0);
+  const bg = isNaN(charCode) ? color : (colors[charCode % colors.length] || color);
   return (
     <div className={`avatar avatar-${size} ${className}`} style={{ background: bg + "22", color: bg }}>
-      {initials}
+      {initials || "?"}
     </div>
   );
 }

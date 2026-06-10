@@ -4,10 +4,44 @@ import { ROLE_META, NAV_CONFIG } from "../shared/constants";
 import { SvgIcon, Avatar } from "../shared/components";
 
 function Sidebar({ activePage, setPage, mobileOpen, setMobileOpen }) {
-  const { session, logout } = useApp();
+  const { session, logout, tasks, notifications } = useApp();
   const role = session?.role || "employee";
   const sections = NAV_CONFIG[role] || NAV_CONFIG.employee;
   const roleMeta = ROLE_META[role] || {};
+
+  const getBadgeValue = (itemId) => {
+    if (itemId === "notifications") {
+      const count = (notifications || []).filter(n => !n.isRead).length;
+      return count > 0 ? count : null;
+    }
+    if (itemId === "approvals") {
+      if (role === "client") {
+        const count = (tasks || []).filter(t => t.approvalStatus === "sent_to_client" && t.clientId === session?.id).length;
+        return count > 0 ? count : null;
+      } else {
+        const count = (tasks || []).filter(t => 
+          t.productionStatus === "ready_for_review" || 
+          t.productionStatus === "review" || 
+          t.approvalStatus === "client_approved" || 
+          t.approvalStatus === "client_rejected"
+        ).length;
+        return count > 0 ? count : null;
+      }
+    }
+    if (itemId === "tasks") {
+      if (role === "employee") {
+        const count = (tasks || []).filter(t => 
+          (t.assignedEmployeeId === session?.id || t.employeeId === session?.id) && 
+          t.productionStatus !== "completed"
+        ).length;
+        return count > 0 ? count : null;
+      } else {
+        const count = (tasks || []).filter(t => t.productionStatus !== "completed").length;
+        return count > 0 ? count : null;
+      }
+    }
+    return null;
+  };
 
   return (
     <>
@@ -43,19 +77,22 @@ function Sidebar({ activePage, setPage, mobileOpen, setMobileOpen }) {
         {sections.map(sec => (
           <div className="sidebar-section" key={sec.label}>
             <div className="sidebar-section-label">{sec.label}</div>
-            {sec.items.map(item => (
-              <div
-                key={item.id}
-                className={`nav-item ${activePage === item.id ? "active" : ""}`}
-                onClick={() => { setPage(item.id); setMobileOpen(false); }}
-              >
-                <span style={{ flexShrink: 0, width: 18, display: "flex", alignItems: "center", justifyContent: "center", opacity: activePage === item.id ? 1 : 0.65 }}>
-                  <SvgIcon name={item.iconName || "alert"} size={15} />
-                </span>
-                <span className="nav-label">{item.label}</span>
-                {item.badge && <span className="nav-badge">{item.badge}</span>}
-              </div>
-            ))}
+            {sec.items.map(item => {
+              const badgeVal = getBadgeValue(item.id);
+              return (
+                <div
+                  key={item.id}
+                  className={`nav-item ${activePage === item.id ? "active" : ""}`}
+                  onClick={() => { setPage(item.id); setMobileOpen(false); }}
+                >
+                  <span style={{ flexShrink: 0, width: 18, display: "flex", alignItems: "center", justifyContent: "center", opacity: activePage === item.id ? 1 : 0.65 }}>
+                    <SvgIcon name={item.iconName || "alert"} size={15} />
+                  </span>
+                  <span className="nav-label">{item.label}</span>
+                  {badgeVal !== null && <span className="nav-badge">{badgeVal}</span>}
+                </div>
+              );
+            })}
           </div>
         ))}
 

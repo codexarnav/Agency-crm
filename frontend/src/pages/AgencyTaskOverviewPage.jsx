@@ -116,7 +116,7 @@ function AgencyTaskOverviewPage() {
                       </td>
                       <td style={{ padding: "11px 12px", fontSize: 12.5 }}>{t.clientName}</td>
                       <td style={{ padding: "11px 12px", fontSize: 12.5 }}>{t.platform}</td>
-                      <td style={{ padding: "11px 12px" }}>{emp ? <div style={{ display: "flex", alignItems: "center", gap: 6 }}><Avatar name={emp.name} size={22} /><span style={{ fontSize: 12 }}>{emp.name.split(" ")[0]}</span></div> : <span style={{ color: "#9CA3AF", fontSize: 12 }}> - </span>}</td>
+                      <td style={{ padding: "11px 12px" }}>{emp ? <div style={{ display: "flex", alignItems: "center", gap: 6 }}><Avatar name={emp.name || emp.username} size={22} /><span style={{ fontSize: 12 }}>{(emp.name || emp.username || "").split(" ")[0]}</span></div> : <span style={{ color: "#9CA3AF", fontSize: 12 }}> - </span>}</td>
                       <td style={{ padding: "11px 12px" }}><span style={{ fontSize: 12.5, color: isOverdue ? "var(--danger)" : "#374151", fontWeight: isOverdue ? 700 : 400 }}>{t.internalDeadline || " - "}{isOverdue && " !"}</span></td>
                       <td style={{ padding: "11px 12px" }}><ProdMBadge s={t.productionStatus} /></td>
                       <td style={{ padding: "11px 12px" }}><ApprovMBadge s={t.approvalStatus} /></td>

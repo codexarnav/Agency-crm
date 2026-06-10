@@ -166,34 +166,60 @@ export const getTasks =
             }
         });
 
-        return tasks.map(task => ({
-            id: task.id,
-            clientId: task.clientId,
-            clientName: task.clientName || task.client?.companyName || "",
-            companyId: task.companyId,
-            platform: PLATFORM_MAP_BE_TO_FE[task.platform] || "Instagram",
-            postingDate: task.postingDate ? task.postingDate.toISOString().split("T")[0] : "",
-            day: task.day || "",
-            contentType: CONTENT_TYPE_MAP_BE_TO_FE[task.contentType] || "Reel",
-            contentDescription: task.title,
-            captionCopy: task.captionCopy || "",
-            priority: PRIORITY_MAP_BE_TO_FE[task.priority] || "medium",
-            assignedEmployeeId: task.employeeId || "",
-            assignedTo: task.assignedToName || task.employee?.username || "",
-            assignmentType: task.assignmentType || "manual",
-            internalDeadline: task.dueDate ? task.dueDate.toISOString().split("T")[0] : "",
-            productionStatus: PROD_STATUS_MAP_BE_TO_FE[task.productionStatus] || "todo",
-            approvalStatus: APPROV_STATUS_MAP_BE_TO_FE[task.approvalStatus] || "pending",
-            publishingStatus: PUB_STATUS_MAP_BE_TO_FE[task.publishingStatus] || "not_scheduled",
-            contentLink: task.contentLink || "",
-            managerNotes: task.managerNotes || "",
-            clientFeedback: task.clientFeedback || "",
-            revisionCount: task.revisionCount,
-            maxRevisions: task.maxRevisions,
-            progress: task.progress || 0,
-            createdAt: task.createdAt,
-            updatedAt: task.updatedAt
-        }));
+        const enhancedTasks = await Promise.all(
+            tasks.map(async (task) => {
+                let shootScript = null;
+                let dynamicContentLink = task.contentLink || "";
+
+                if (task.description && task.description.includes("[Shoot Script ID:")) {
+                    const match = task.description.match(/\[Shoot Script ID:\s*([a-fA-F0-9-]+)\]/);
+                    if (match && match[1]) {
+                        const shootId = match[1];
+                        shootScript = await prisma.shootScript.findFirst({
+                            where: {
+                                shootId: shootId,
+                                employeeId: task.employeeId || undefined,
+                            },
+                        });
+                        if (shootScript && shootScript.scriptFileUrl) {
+                            dynamicContentLink = task.contentLink || shootScript.scriptFileUrl;
+                        }
+                    }
+                }
+
+                return {
+                    id: task.id,
+                    clientId: task.clientId,
+                    clientName: task.clientName || task.client?.companyName || "",
+                    companyId: task.companyId,
+                    platform: PLATFORM_MAP_BE_TO_FE[task.platform] || "Instagram",
+                    postingDate: task.postingDate ? task.postingDate.toISOString().split("T")[0] : "",
+                    day: task.day || "",
+                    contentType: CONTENT_TYPE_MAP_BE_TO_FE[task.contentType] || "Reel",
+                    contentDescription: task.title,
+                    captionCopy: task.captionCopy || "",
+                    priority: PRIORITY_MAP_BE_TO_FE[task.priority] || "medium",
+                    assignedEmployeeId: task.employeeId || "",
+                    assignedTo: task.assignedToName || task.employee?.username || "",
+                    assignmentType: task.assignmentType || "manual",
+                    internalDeadline: task.dueDate ? task.dueDate.toISOString().split("T")[0] : "",
+                    productionStatus: PROD_STATUS_MAP_BE_TO_FE[task.productionStatus] || "todo",
+                    approvalStatus: APPROV_STATUS_MAP_BE_TO_FE[task.approvalStatus] || "pending",
+                    publishingStatus: PUB_STATUS_MAP_BE_TO_FE[task.publishingStatus] || "not_scheduled",
+                    contentLink: dynamicContentLink,
+                    shootScript: shootScript,
+                    managerNotes: task.managerNotes || "",
+                    clientFeedback: task.clientFeedback || "",
+                    revisionCount: task.revisionCount,
+                    maxRevisions: task.maxRevisions,
+                    progress: task.progress || 0,
+                    createdAt: task.createdAt,
+                    updatedAt: task.updatedAt
+                };
+            })
+        );
+
+        return enhancedTasks;
     };
 
 export const updateTaskStatus =
