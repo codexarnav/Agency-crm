@@ -1,6 +1,18 @@
 import prisma from "../config/prisma.js";
 import { hashPassword } from "../../utils/hashpasswords.js";
 
+function generateUsername(name, dob) {
+    const cleanName = (name || "").toLowerCase().replace(/\s+/g, "");
+    if (!dob) return cleanName;
+    const parts = dob.split("-");
+    if (parts.length === 3) {
+        // HTML date input is YYYY-MM-DD -> convert to DD-MM-YYYY
+        const formattedDob = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        return `${cleanName}@${formattedDob}`;
+    }
+    return `${cleanName}@${dob}`;
+}
+
 export const CreateManager = async (
     data,
     loggedInUser
@@ -9,6 +21,7 @@ export const CreateManager = async (
     const {
         username,
         name,
+        dob,
         email,
         phoneNumber,
         phone,
@@ -39,7 +52,7 @@ export const CreateManager = async (
     const passwordHash =
         await hashPassword(password);
 
-    const uname = username || name || email.split("@")[0];
+    const uname = name && dob ? generateUsername(name, dob) : (username || name || email.split("@")[0]);
     const pnum = phoneNumber || phone;
 
     return await prisma.user.create({
@@ -48,6 +61,8 @@ export const CreateManager = async (
                 loggedInUser.companyId,
 
             username: uname,
+            name: name || null,
+            dob: dob || null,
             email,
             phoneNumber: pnum,
 
@@ -73,6 +88,7 @@ export const CreateEmployee = async (
     const {
         username,
         name,
+        dob,
         email,
         phoneNumber,
         phone,
@@ -104,7 +120,7 @@ export const CreateEmployee = async (
     const passwordHash =
         await hashPassword(password);
 
-    const uname = username || name || email.split("@")[0];
+    const uname = name && dob ? generateUsername(name, dob) : (username || name || email.split("@")[0]);
     const pnum = phoneNumber || phone;
 
     return await prisma.user.create({
@@ -116,6 +132,8 @@ export const CreateEmployee = async (
                 loggedInUser.role === "MANAGER" ? loggedInUser.id : (assignedManager || null),
 
             username: uname,
+            name: name || null,
+            dob: dob || null,
             email,
             phoneNumber: pnum,
 
@@ -142,6 +160,8 @@ export const ListManagers = async (loggedInUser) => {
         select: {
             id: true,
             username: true,
+            name: true,
+            dob: true,
             email: true,
             phoneNumber: true,
             profilePicture: true,
@@ -157,7 +177,7 @@ export const ListManagers = async (loggedInUser) => {
     });
     return managers.map(mgr => ({
         ...mgr,
-        name: mgr.username
+        name: mgr.name || mgr.username
     }));
 };
 
@@ -174,6 +194,8 @@ export const ListEmployees = async (loggedInUser) => {
         select: {
             id: true,
             username: true,
+            name: true,
+            dob: true,
             email: true,
             phoneNumber: true,
             profilePicture: true,
@@ -190,7 +212,7 @@ export const ListEmployees = async (loggedInUser) => {
     });
     return employees.map(emp => ({
         ...emp,
-        name: emp.username
+        name: emp.name || emp.username
     }));
 };
 
@@ -198,6 +220,7 @@ export const UpdateUser = async (id, data, loggedInUser) => {
     const {
         username,
         name,
+        dob,
         email,
         phoneNumber,
         phone,
@@ -217,7 +240,22 @@ export const UpdateUser = async (id, data, loggedInUser) => {
     const uname = username || name;
     const pnum = phoneNumber || phone;
 
-    if (uname !== undefined) updateData.username = uname;
+    if (name !== undefined) updateData.name = name;
+    if (dob !== undefined) updateData.dob = dob;
+
+    if (name || dob) {
+        const user = await prisma.user.findUnique({ where: { id } });
+        if (user) {
+            const finalName = name !== undefined ? name : user.name;
+            const finalDob = dob !== undefined ? dob : user.dob;
+            if (finalName && finalDob) {
+                updateData.username = generateUsername(finalName, finalDob);
+            }
+        }
+    } else if (username !== undefined) {
+        updateData.username = username;
+    }
+
     if (email !== undefined) updateData.email = email;
     if (pnum !== undefined) updateData.phoneNumber = pnum;
     if (profilePicture !== undefined) updateData.profilePicture = profilePicture;

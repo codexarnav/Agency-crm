@@ -3,11 +3,11 @@ import { useState, useEffect } from "react";
 import { useApp } from "../shared/AppContext";
 import { ROLE_META, NAV_CONFIG, LS_KEYS } from "../shared/constants";
 import { LSUtils } from "../shared/utils";
-import { SvgIcon, Avatar } from "../shared/components";
-import { markNotificationRead } from "../services/api";
+import { SvgIcon, Avatar, Modal, FormInput, Btn, ImageUploadDropdown } from "../shared/components";
+import { markNotificationRead, changePassword } from "../services/api";
 
 function Topbar({ page, setMobileOpen, setPage }) {
-  const { notifications: rawNotifs, session, logout, refreshNotifications } = useApp();
+  const { notifications: rawNotifs, session, logout, refreshNotifications, showToast, updateSession, employees } = useApp();
   const role = session?.role || "employee";
   const roleMeta = ROLE_META[role] || {};
 
@@ -29,9 +29,54 @@ function Topbar({ page, setMobileOpen, setPage }) {
 
   const unread = notifs.filter(n => !n.read).length;
 
-  const [searchVal, setSearchVal] = useState("");
   const [showNotifs, setShowNotifs] = useState(false);
   const [showUser, setShowUser] = useState(false);
+
+  // Password modal states
+  const [passModalOpen, setPassModalOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passError, setPassError] = useState("");
+  const [passLoading, setPassLoading] = useState(false);
+
+  // Profile modal states
+  const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    name: "",
+    email: "",
+    phoneNumber: "",
+    dob: "",
+    profilePicture: "",
+  });
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [uploadingProfilePic, setUploadingProfilePic] = useState(false);
+
+  const handlePasswordChange = async () => {
+    setPassError("");
+    if (!newPassword || newPassword.length < 6) {
+      setPassError("Password must be at least 6 characters long.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPassError("Passwords do not match.");
+      return;
+    }
+
+    setPassLoading(true);
+    try {
+      const res = await changePassword({ newPassword });
+      if (res.success) {
+        showToast("Password updated successfully!", "success");
+        setPassModalOpen(false);
+        setNewPassword("");
+        setConfirmPassword("");
+      }
+    } catch (err) {
+      setPassError(err.message || "Failed to update password.");
+    } finally {
+      setPassLoading(false);
+    }
+  };
 
   // Refresh notifs when panel opens
   useEffect(() => {
@@ -39,6 +84,82 @@ function Topbar({ page, setMobileOpen, setPage }) {
       refreshNotifications();
     }
   }, [showNotifs, refreshNotifications]);
+
+  useEffect(() => {
+    if (profileModalOpen && session) {
+      const emp = (employees || []).find(e => e.id === session.id);
+      setProfileForm({
+        name: session.name || emp?.name || "",
+        email: session.email || emp?.email || "",
+        phoneNumber: session.phoneNumber || emp?.phoneNumber || "",
+        dob: emp?.dob || "",
+        profilePicture: session.profilePicture || emp?.profilePicture || "",
+      });
+    }
+  }, [profileModalOpen, session, employees]);
+
+  const handleProfileSave = async () => {
+    setProfileLoading(true);
+    try {
+      const { updateUser } = await import("../services/api");
+      const res = await updateUser(session.id, {
+        name: profileForm.name,
+        email: profileForm.email,
+        phoneNumber: profileForm.phoneNumber,
+        dob: profileForm.dob,
+        profilePicture: profileForm.profilePicture,
+      });
+
+      if (res.success) {
+        showToast("Profile updated successfully!", "success");
+        updateSession({
+          name: profileForm.name,
+          email: profileForm.email,
+          profilePicture: profileForm.profilePicture,
+        });
+        setProfileModalOpen(false);
+      }
+    } catch (err) {
+      showToast(err.message || "Failed to update profile", "danger");
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const handleProfilePicUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      showToast("Only image files are allowed", "danger");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    setUploadingProfilePic(true);
+    try {
+      const token = LSUtils.getData(LS_KEYS.SESSION)?.token || localStorage.getItem("crm_auth_token");
+      const headers = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        headers,
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Upload failed");
+
+      setProfileForm(prev => ({ ...prev, profilePicture: data.url }));
+      showToast("Image uploaded successfully!", "success");
+    } catch (err) {
+      showToast(err.message || "Failed to upload image", "danger");
+    } finally {
+      setUploadingProfilePic(false);
+    }
+  };
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -98,30 +219,10 @@ function Topbar({ page, setMobileOpen, setPage }) {
 
   return (
     <div className="topbar" style={{ gap: 12 }}>
-      {/* Mobile hamburger */}
-      <button
-        className="btn btn-ghost btn-icon mobile-menu-btn"
-        onClick={() => setMobileOpen(v => !v)}
-        style={{ flexShrink: 0 }}
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6" /><line x1="3" y1="12" x2="21" y2="12" /><line x1="3" y1="18" x2="21" y2="18" /></svg>
-      </button>
-
       {/* Page title */}
-      <div className="topbar-title hide-mobile">{pageTitle}</div>
+      <div className="topbar-title">{pageTitle}</div>
 
       <div style={{ flex: 1 }} />
-
-      {/* Global search */}
-      <div className="global-search" onClick={e => e.currentTarget.querySelector("input")?.focus()}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--muted)" strokeWidth="2.2" strokeLinecap="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
-        <input
-          value={searchVal}
-          onChange={e => setSearchVal(e.target.value)}
-          placeholder="Search anything..."
-        />
-        <span className="search-shortcut hide-mobile">CmdK</span>
-      </div>
 
       {/* Topbar actions */}
       <div className="topbar-actions">
@@ -226,7 +327,7 @@ function Topbar({ page, setMobileOpen, setPage }) {
             className="user-dropdown-trigger"
             onClick={() => { setShowUser(v => !v); setShowNotifs(false); }}
           >
-            <Avatar name={session?.name || "User"} size="sm" />
+            <Avatar name={session?.name || "User"} src={session?.profilePicture} size="sm" />
             <div className="hide-mobile" style={{ minWidth: 0 }}>
               <div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--dark)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 110 }}>
                 {session?.name?.split(" ")[0] || "User"}
@@ -240,7 +341,7 @@ function Topbar({ page, setMobileOpen, setPage }) {
               {/* User info header */}
               <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--border)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <Avatar name={session?.name || "User"} size="md" />
+                  <Avatar name={session?.name || "User"} src={session?.profilePicture} size="md" />
                   <div>
                     <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--dark)" }}>{session?.name}</div>
                     <div style={{ fontSize: 12, color: "var(--muted)" }}>{session?.email}</div>
@@ -253,14 +354,11 @@ function Topbar({ page, setMobileOpen, setPage }) {
                   </div>
                 </div>
               </div>
-              <button className="dropdown-item">
+              <button className="dropdown-item" onClick={() => { setProfileModalOpen(true); setShowUser(false); }}>
                 <SvgIcon name="user" size={15} color="var(--muted)" /> My Profile
               </button>
-              <button className="dropdown-item">
+              <button className="dropdown-item" onClick={() => { setPassModalOpen(true); setShowUser(false); }}>
                 <SvgIcon name="lock" size={15} color="var(--muted)" /> Change Password
-              </button>
-              <button className="dropdown-item">
-                <SvgIcon name="palette" size={15} color="var(--muted)" /> Preferences
               </button>
               <div className="dropdown-divider" />
               <button className="dropdown-item danger" onClick={logout}>
@@ -270,6 +368,123 @@ function Topbar({ page, setMobileOpen, setPage }) {
           )}
         </div>
       </div>
+
+      {/* Change Password Modal */}
+      <Modal
+        open={passModalOpen}
+        onClose={() => { setPassModalOpen(false); setNewPassword(""); setConfirmPassword(""); setPassError(""); }}
+        title="Change Password"
+        footer={
+          <div style={{ display: "flex", gap: 10 }}>
+            <Btn variant="outline" onClick={() => { setPassModalOpen(false); setNewPassword(""); setConfirmPassword(""); setPassError(""); }} disabled={passLoading}>Cancel</Btn>
+            <Btn onClick={handlePasswordChange} disabled={passLoading}>
+              {passLoading ? "Updating..." : "Update Password"}
+            </Btn>
+          </div>
+        }
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 0, textAlign: "left" }}>
+          {passError && (
+            <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", marginBottom: 14, color: "var(--danger)", fontSize: 13, display: "flex", gap: 8, alignItems: "center" }}>
+              <SvgIcon name="alert" size={14} color="var(--danger)" />{passError}
+            </div>
+          )}
+          <FormInput
+            label="New Password"
+            type="password"
+            value={newPassword}
+            onChange={e => setNewPassword(e.target.value)}
+            placeholder="Min. 6 characters"
+          />
+          <FormInput
+            label="Confirm New Password"
+            type="password"
+            value={confirmPassword}
+            onChange={e => setConfirmPassword(e.target.value)}
+            placeholder="Re-enter new password"
+          />
+        </div>
+      </Modal>
+
+      {/* My Profile Modal */}
+      {profileModalOpen && (
+        <Modal
+          open={profileModalOpen}
+          onClose={() => setProfileModalOpen(false)}
+          title="My Profile"
+          size="md"
+          footer={
+            <div style={{ display: "flex", gap: 10, width: "100%" }}>
+              <Btn variant="outline" onClick={() => setProfileModalOpen(false)} disabled={profileLoading}>Cancel</Btn>
+              <Btn onClick={handleProfileSave} disabled={profileLoading || uploadingProfilePic} style={{ marginLeft: "auto" }}>
+                {profileLoading ? "Saving..." : "Save Changes"}
+              </Btn>
+            </div>
+          }
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 16, textAlign: "left", padding: "10px 0" }}>
+            <ImageUploadDropdown
+              value={profileForm.profilePicture}
+              onChange={url => setProfileForm(p => ({ ...p, profilePicture: url }))}
+              name={profileForm.name || session?.name}
+              showToast={showToast}
+            />
+
+            <div className="grid-2">
+              <FormInput
+                label="Full Name"
+                value={profileForm.name}
+                onChange={e => setProfileForm(p => ({ ...p, name: e.target.value }))}
+                placeholder="e.g. John Doe"
+              />
+              <div className="form-group">
+                <label className="form-label">Username</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={session?.name || ""}
+                  disabled
+                  style={{ background: "#F3F4F6", cursor: "not-allowed" }}
+                />
+              </div>
+            </div>
+
+            <div className="grid-2">
+              <FormInput
+                label="Email Address"
+                type="email"
+                value={profileForm.email}
+                onChange={e => setProfileForm(p => ({ ...p, email: e.target.value }))}
+                placeholder="name@company.com"
+              />
+              <FormInput
+                label="Phone Number"
+                value={profileForm.phoneNumber}
+                onChange={e => setProfileForm(p => ({ ...p, phoneNumber: e.target.value }))}
+                placeholder="+91 98000 00000"
+              />
+            </div>
+
+            <div className="grid-2">
+              <FormInput
+                label="Date of Birth"
+                type="date"
+                value={profileForm.dob ? profileForm.dob.split("T")[0] : ""}
+                onChange={e => setProfileForm(p => ({ ...p, dob: e.target.value }))}
+              />
+              <div className="form-group">
+                <label className="form-label">Account Role</label>
+                <div style={{ display: "flex", height: 38, alignItems: "center" }}>
+                  <span className="badge badge-purple" style={{ fontSize: 12, padding: "4px 10px" }}>
+                    {session?.displayRole || session?.role?.toUpperCase()}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

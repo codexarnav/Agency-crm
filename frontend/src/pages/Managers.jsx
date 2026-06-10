@@ -3,31 +3,79 @@ import { useState, useEffect, useCallback } from "react";
 import { useApp } from "../shared/AppContext";
 import {
   SvgIcon, Btn, Avatar, StatusBadge, EmptyState, SearchBar,
-  Modal, FormInput, DataTable,
+  Modal, FormInput, DataTable, ImageUploadDropdown,
 } from "../shared/components";
-import { getManagers, createManager } from "../services/api";
+import { getManagers, createManager, getToken } from "../services/api";
 
 // CreateManagerModal
 function CreateManagerModal({ open, onClose, onSuccess }) {
+  const { showToast } = useApp();
   const [form, setForm] = useState({
-    username: "", email: "", phoneNumber: "", password: "", profilePicture: "",
+    name: "", dob: "", email: "", phoneNumber: "", password: "", profilePicture: "",
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [uploadingPic, setUploadingPic] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setForm({ username: "", email: "", phoneNumber: "", password: "", profilePicture: "" });
+      setForm({ name: "", dob: "", email: "", phoneNumber: "", password: "", profilePicture: "" });
       setErrors({});
       setLoading(false);
+      setUploadingPic(false);
     }
   }, [open]);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
 
+  const handlePicUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("Only image files are allowed");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    setUploadingPic(true);
+    try {
+      const token = getToken();
+      const headers = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        headers,
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Upload failed");
+
+      set("profilePicture", data.url);
+    } catch (err) {
+      alert(err.message || "Failed to upload photo");
+    } finally {
+      setUploadingPic(false);
+    }
+  };
+
+  const getGeneratedUsername = () => {
+    const cleanName = (form.name || "").toLowerCase().replace(/\s+/g, "");
+    if (!form.dob) return cleanName || "name@dob";
+    const parts = form.dob.split("-");
+    if (parts.length === 3) {
+      return `${cleanName}@${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+    return `${cleanName}@${form.dob}`;
+  };
+
   const validate = () => {
     const e = {};
-    if (!form.username.trim()) e.username = "Username is required";
+    if (!form.name.trim()) e.name = "Full Name is required";
+    if (!form.dob.trim()) e.dob = "Date of Birth is required";
     if (!form.email.trim()) e.email = "Email is required";
     else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = "Enter a valid email";
     if (!form.phoneNumber.trim()) e.phoneNumber = "Phone number is required";
@@ -42,7 +90,8 @@ function CreateManagerModal({ open, onClose, onSuccess }) {
     setLoading(true);
     try {
       await createManager({
-        username: form.username.trim(),
+        name: form.name.trim(),
+        dob: form.dob.trim(),
         email: form.email.trim(),
         phoneNumber: form.phoneNumber.trim(),
         password: form.password,
@@ -80,11 +129,21 @@ function CreateManagerModal({ open, onClose, onSuccess }) {
             <SvgIcon name="alert" size={14} color="var(--danger)" />{errors._api}
           </div>
         )}
-        <FormInput label="Username *" value={form.username} onChange={e => set("username", e.target.value)} placeholder="e.g. john_manager" error={errors.username} />
+        <FormInput label="Full Name *" value={form.name} onChange={e => set("name", e.target.value)} placeholder="e.g. John Doe" error={errors.name} />
+        <FormInput label="Date of Birth *" type="date" value={form.dob} onChange={e => set("dob", e.target.value)} error={errors.dob} />
+        <div style={{ fontSize: 12, color: "var(--primary)", fontWeight: 600, padding: "0 4px", marginBottom: 16, display: "flex", gap: 6 }}>
+          <span>Generated Username:</span>
+          <span style={{ color: "var(--dark)" }}>{getGeneratedUsername()}</span>
+        </div>
         <FormInput label="Email *" type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="manager@company.com" error={errors.email} />
         <FormInput label="Phone Number *" value={form.phoneNumber} onChange={e => set("phoneNumber", e.target.value)} placeholder="+91 98000 00000" error={errors.phoneNumber} />
         <FormInput label="Password *" type="password" value={form.password} onChange={e => set("password", e.target.value)} placeholder="Min 6 characters" error={errors.password} />
-        <FormInput label="Profile Picture URL" value={form.profilePicture} onChange={e => set("profilePicture", e.target.value)} placeholder="https://example.com/photo.jpg" hint="Optional — paste an image URL" />
+        <ImageUploadDropdown
+          value={form.profilePicture}
+          onChange={url => set("profilePicture", url)}
+          name={form.name || "Manager"}
+          showToast={showToast}
+        />
       </div>
     </Modal>
   );
@@ -160,11 +219,12 @@ function ManagersPage() {
           <DataTable
             columns={[
               {
-                key: "username", label: "Name", render: (v, row) => (
+                key: "username", label: "Name / Username", render: (v, row) => (
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <Avatar name={v || "M"} size="sm" />
+                    <Avatar name={row.name || v || "M"} src={row.profilePicture} size="sm" />
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: 13.5 }}>{v}</div>
+                      <div style={{ fontWeight: 700, fontSize: 13.5 }}>{row.name || v}</div>
+                      {(row.name && v) && <div style={{ fontSize: 11, color: "var(--muted)" }}>{v}</div>}
                     </div>
                   </div>
                 )

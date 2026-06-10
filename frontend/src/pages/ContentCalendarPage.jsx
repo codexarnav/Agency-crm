@@ -15,6 +15,17 @@ import {
 import { getPublishingCalendar, reschedulePost, cancelPost } from "../services/api";
 import { useCallback } from "react";
 
+const formatDate = (dateStr) => {
+  if (!dateStr) return " - ";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  } catch (e) {
+    return dateStr;
+  }
+};
+
 function ContentCalendarPage() {
   const { clients, employees, showToast, tasks, session, refreshTasks } = useApp();
   const holidays = LSUtils.getData(LS_KEYS.HOLIDAYS) || MOCK.holidays;
@@ -40,6 +51,30 @@ function ContentCalendarPage() {
   const [rescheduleTime, setRescheduleTime] = useState("");
 
   const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+  const getContractStatusMessage = () => {
+    if (filterClient === "all") return null;
+    const client = clients.find(c => c.id === filterClient);
+    if (!client || !client.startDate) return null;
+    
+    const start = new Date(client.startDate);
+    const renewal = client.renewalDate ? new Date(client.renewalDate) : null;
+    
+    const viewStart = new Date(curYear, curMonth, 1);
+    const viewEnd = new Date(curYear, curMonth + 1, 0);
+    
+    if (viewEnd < start) {
+      return `Warning: Viewing ${monthNames[curMonth]} ${curYear}, which is before ${client.name || "client"}'s contract start date (${formatDate(client.startDate)}).`;
+    }
+    
+    if (renewal && viewStart > renewal) {
+      return `Warning: Viewing ${monthNames[curMonth]} ${curYear}, which is after ${client.name || "client"}'s contract renewal date (${formatDate(client.renewalDate)}).`;
+    }
+    
+    return null;
+  };
+  
+  const contractWarning = getContractStatusMessage();
 
   const platformColor = (platform) => {
     const plat = platform?.toUpperCase() || "";
@@ -225,6 +260,13 @@ function ContentCalendarPage() {
           <button className="filter-chip" onClick={() => { if (curMonth === 11) { setCurMonth(0); setCurYear(y => y + 1); } else setCurMonth(m => m + 1); }}>Next</button>
         </div>
       </div>
+
+      {contractWarning && (
+        <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", marginBottom: 14, color: "var(--danger)", fontSize: 13, display: "flex", gap: 8, alignItems: "center", fontWeight: 600 }} className="fade-in">
+          <SvgIcon name="alert" size={14} color="var(--danger)" />
+          <span>{contractWarning}</span>
+        </div>
+      )}
 
       {view === "month" && (
         <div className="card" style={{ overflow: "hidden" }}>

@@ -112,14 +112,33 @@ function StatusBadge({ status }) {
 }
 
 // Avatar
-function Avatar({ name, size = "md", color = "#FF6A00", className = "" }) {
+function Avatar({ name, src, size = "md", color = "#FF6A00", className = "" }) {
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [src]);
+
   const safeName = name || "";
   const initials = safeName.split(" ").slice(0, 2).map(w => w[0] || "").join("").toUpperCase();
   const colors = ["#FF6A00", "#7C3AED", "#16A34A", "#0EA5E9", "#F59E0B", "#EC4899", "#06B6D4", "#84CC16"];
   const charCode = safeName.charCodeAt(0);
   const bg = isNaN(charCode) ? color : (colors[charCode % colors.length] || color);
+
+  if (src && src.trim() && !imgError) {
+    return (
+      <img
+        src={src}
+        alt={safeName}
+        className={`avatar avatar-${size} ${className}`}
+        style={{ objectFit: "cover", borderRadius: "50%", display: "block" }}
+        onError={() => setImgError(true)}
+      />
+    );
+  }
+
   return (
-    <div className={`avatar avatar-${size} ${className}`} style={{ background: bg + "22", color: bg }}>
+    <div className={`avatar avatar-${size} ${className}`} style={{ background: bg + "22", color: bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
       {initials || "?"}
     </div>
   );
@@ -568,9 +587,142 @@ function InfoRow({ label, value }) {
 }
 
 
+// ImageUploadDropdown
+function ImageUploadDropdown({ value, onChange, name, placeholder = "User", label = "Profile Picture", showToast }) {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [urlInputOpen, setUrlInputOpen] = useState(false);
+  const [urlVal, setUrlVal] = useState("");
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setDropdownOpen(false);
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, []);
+
+  const triggerUpload = (e) => {
+    e.stopPropagation();
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = async (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      if (!file.type.startsWith("image/")) {
+        if (showToast) showToast("Only image files are allowed", "danger");
+        else alert("Only image files are allowed");
+        return;
+      }
+      const formData = new FormData();
+      formData.append("file", file);
+      setUploading(true);
+      try {
+        const token = localStorage.getItem("crm_auth_token") || LSUtils.getData(LS_KEYS.SESSION)?.token;
+        const headers = {};
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          headers,
+          body: formData,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || "Upload failed");
+        onChange(data.url);
+        if (showToast) showToast("Image uploaded successfully!", "success");
+      } catch (err) {
+        if (showToast) showToast(err.message || "Upload failed", "danger");
+        else alert(err.message || "Upload failed");
+      } finally {
+        setUploading(false);
+      }
+    };
+    input.click();
+  };
+
+  const handleUrlSubmit = (e) => {
+    e.preventDefault();
+    if (urlVal.trim()) {
+      onChange(urlVal.trim());
+      setUrlVal("");
+      setUrlInputOpen(false);
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 16, padding: 12, background: "#F9FAFB", borderRadius: 8, border: "1px solid var(--border)", width: "100%" }}>
+      <Avatar name={name || placeholder} src={value} size="md" />
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1, position: "relative" }}>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--dark)" }}>{label}</span>
+        <div style={{ display: "flex", gap: 8, position: "relative" }}>
+          <div style={{ position: "relative" }}>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={(e) => { e.stopPropagation(); setDropdownOpen(!dropdownOpen); }}
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12, padding: "4px 10px" }}
+            >
+              <SvgIcon name="image" size={13} />
+              {uploading ? "Uploading..." : "Change Image"}
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><polyline points="6 9 12 15 18 9" /></svg>
+            </button>
+            {dropdownOpen && (
+              <div 
+                className="user-dropdown-menu" 
+                style={{ 
+                  top: "100%", 
+                  left: 0, 
+                  marginTop: 6, 
+                  boxShadow: "var(--shadow-lg)", 
+                  border: "1px solid var(--border)", 
+                  borderRadius: 8, 
+                  background: "#fff", 
+                  minWidth: 160,
+                  zIndex: 350
+                }}
+              >
+                <button type="button" className="dropdown-item" onClick={triggerUpload} style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span>📷</span> Upload Photo...
+                </button>
+                <button 
+                  type="button" 
+                  className="dropdown-item" 
+                  onClick={(e) => { e.stopPropagation(); setUrlInputOpen(true); setDropdownOpen(false); }}
+                  style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 8 }}
+                >
+                  <span>🔗</span> Use Image Link...
+                </button>
+                {value && (
+                  <button type="button" className="dropdown-item danger" onClick={() => onChange("")} style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                    <span>❌</span> Remove Image
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {urlInputOpen && (
+          <div style={{ display: "flex", gap: 6, marginTop: 6, width: "100%", maxWidth: 360 }} onClick={e => e.stopPropagation()}>
+            <input
+              type="text"
+              className="form-input"
+              value={urlVal}
+              onChange={(e) => setUrlVal(e.target.value)}
+              placeholder="https://example.com/image.jpg"
+              style={{ fontSize: 12, padding: "5px 8px", flex: 1 }}
+            />
+            <button type="button" className="btn btn-primary btn-sm" onClick={handleUrlSubmit} style={{ padding: "4px 10px" }}>Add</button>
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => setUrlInputOpen(false)} style={{ padding: "4px 10px" }}>Cancel</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export {
   SvgIcon, Btn, StatusBadge, Avatar, ProgressBar, FormInput, SearchBar,
   FilterBar, EmptyState, Modal, Toast, DataTable, AnimStatCard,
   RoleBanner, AnnouncementBanner, ActivityFeed, PendingApprovals,
-  UpcomingDeadlines, QuickActions, InfoRow,
+  UpcomingDeadlines, QuickActions, InfoRow, ImageUploadDropdown,
 };

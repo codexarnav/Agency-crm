@@ -40,7 +40,7 @@ import ShootsPage from "../pages/ShootsPage";
 import PublishingQueue from "../pages/PublishingQueue";
 import SettingsPage from "../pages/SettingsPage";
 
-function AppShell({ session, logout }) {
+function AppShell({ session, logout, updateSession }) {
   const [page, setPage] = useState("dashboard");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [toasts, setToasts] = useState([]);
@@ -183,6 +183,7 @@ function AppShell({ session, logout }) {
   const ctx = {
     session,
     logout,
+    updateSession,
     notifications,
     clients,
     tasks,

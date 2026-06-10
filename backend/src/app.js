@@ -19,6 +19,11 @@ import revisionRoutes from "./routes/revision.routes.js";
 import shootRoutes from "./routes/shoot.routes.js";
 import publishingRoutes from "./routes/publishing.routes.js";
 import settingsRoutes from "./routes/settings.routes.js";
+
+import upload from "../middleware/upload.middleware.js";
+import { uploadToCloudinary } from "../utils/uploadToCloudinary.js";
+import { verifyToken } from "../middleware/auth.middleware.js";
+
 const app = express();
 
 app.use(cors({
@@ -47,6 +52,21 @@ app.use("/api/revisions", revisionRoutes);
 app.use("/api/shoots", shootRoutes);
 app.use("/api/publishing", publishingRoutes);
 app.use("/api/settings", settingsRoutes);
+
+app.post("/api/upload", verifyToken, upload.single("file"), async (req, res, next) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ success: false, message: "No file uploaded" });
+        }
+        const result = await uploadToCloudinary(req.file.buffer, "agencyflow/uploads");
+        return res.status(200).json({
+            success: true,
+            url: result.secure_url,
+        });
+    } catch (err) {
+        next(err);
+    }
+});
 
 // Global Error Handler
 app.use((err, req, res, next) => {

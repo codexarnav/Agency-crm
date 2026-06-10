@@ -26,6 +26,15 @@ function AppInner() {
   });
   const [regToast, setRegToast] = useState(null);
 
+  const updateSession = (newDetails) => {
+    setSession(prev => {
+      if (!prev) return null;
+      const next = { ...prev, ...newDetails };
+      LSUtils.setCurrentSession(next);
+      return next;
+    });
+  };
+
   // When AuthContext finishes loading, sync session
   useEffect(() => {
     if (authLoading) return;
@@ -40,6 +49,7 @@ function AppInner() {
         companyId: authUser.companyId,
         companyName: "Your Agency",
         displayRole: ROLE_META[authUser.role]?.label || authUser.role,
+        profilePicture: authUser.profilePicture || "",
       };
       LSUtils.setCurrentSession(newSession);
       setSession(newSession);
@@ -115,7 +125,7 @@ function AppInner() {
       )}
 
       {screen === "app" && session && (
-        <AppShell session={session} logout={handleLogout} regToast={regToast} />
+        <AppShell session={session} logout={handleLogout} regToast={regToast} updateSession={updateSession} />
       )}
     </>
   );

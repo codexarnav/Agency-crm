@@ -9,15 +9,52 @@ import {
   connectPublishingPlatform,
   disconnectPublishingPlatform,
   getNotificationsSettings,
-  updateNotificationsSettings
+  updateNotificationsSettings,
+  getToken
 } from "../services/api";
-import { SvgIcon, Btn, FormInput } from "../shared/components";
+import { SvgIcon, Btn, FormInput, ImageUploadDropdown } from "../shared/components";
 import { INDUSTRY_OPTIONS, TIMEZONE_OPTIONS } from "../shared/constants";
 
 function SettingsPage() {
   const { showToast, session } = useApp();
   const [activeTab, setActiveTab] = useState("company");
   const [loading, setLoading] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  const handleLogoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      showToast("Only image files are allowed", "danger");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    setUploadingLogo(true);
+    try {
+      const token = getToken();
+      const headers = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        headers,
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Upload failed");
+
+      setCompanyForm(prev => ({ ...prev, companyLogo: data.url }));
+      showToast("Logo uploaded successfully!", "success");
+    } catch (err) {
+      showToast(err.message || "Failed to upload logo", "danger");
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
 
   // Form states
   const [companyForm, setCompanyForm] = useState({
@@ -263,18 +300,20 @@ function SettingsPage() {
         <form onSubmit={handleSaveCompany} className="card" style={{ maxWidth: 760, padding: 28 }}>
           <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 20, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Agency Brand Identity</h2>
           
+          <ImageUploadDropdown
+            value={companyForm.companyLogo}
+            onChange={url => setCompanyForm(prev => ({ ...prev, companyLogo: url }))}
+            name={companyForm.name || "Agency"}
+            label="Agency Logo"
+            showToast={showToast}
+          />
+
           <div className="grid-2">
             <FormInput
               label="Company / Agency Name *"
               value={companyForm.name}
               onChange={e => setCompanyForm(prev => ({ ...prev, name: e.target.value }))}
               required
-            />
-            <FormInput
-              label="Brand Logo URL"
-              value={companyForm.companyLogo}
-              onChange={e => setCompanyForm(prev => ({ ...prev, companyLogo: e.target.value }))}
-              placeholder="https://example.com/logo.png"
             />
           </div>
 

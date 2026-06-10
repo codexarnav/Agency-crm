@@ -1,4 +1,6 @@
 import { CreateManager, CreateEmployee, ListManagers, ListEmployees, UpdateUser, DeleteUser, ListManagersPerformance } from "../services/user.service.js";
+import prisma from "../config/prisma.js";
+import { hashPassword } from "../../utils/hashpasswords.js";
 
 export const createManagerUser = async (req, res) => {
     try {
@@ -83,6 +85,22 @@ export const getEmployees = async (req, res) => {
 
 export const updateUserUser = async (req, res) => {
     try {
+        if (req.user.id !== req.params.id && req.user.role !== "SUPER_ADMIN" && req.user.role !== "MANAGER") {
+            return res.status(403).json({
+                success: false,
+                message: "Forbidden: You can only update your own profile",
+            });
+        }
+
+        if (req.user.role !== "SUPER_ADMIN" && req.user.role !== "MANAGER") {
+            if (req.body.role !== undefined || req.body.isActive !== undefined) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Forbidden: Non-admin users cannot update role or active status",
+                });
+            }
+        }
+
         const user = await UpdateUser(req.params.id, req.body, req.user);
         return res.status(200).json({
             success: true,
@@ -103,6 +121,31 @@ export const deleteUserUser = async (req, res) => {
         return res.status(200).json({
             success: true,
             message: "User Deleted",
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
+
+export const changePassword = async (req, res) => {
+    try {
+        const { newPassword } = req.body;
+        if (!newPassword || newPassword.length < 6) {
+            throw new Error("Password must be at least 6 characters long");
+        }
+
+        const passwordHash = await hashPassword(newPassword);
+        await prisma.user.update({
+            where: { id: req.user.id },
+            data: { passwordHash },
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: "Password updated successfully",
         });
     } catch (error) {
         return res.status(400).json({

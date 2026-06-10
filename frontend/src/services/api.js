@@ -64,6 +64,10 @@ export async function signupUser(payload) {
   return request("POST", "/auth/signup", payload);
 }
 
+export async function changePassword(payload) {
+  return request("POST", "/users/change-password", payload);
+}
+
 // ── User / Employee Management API ─────────────────────────
 export async function createManager(payload) {
   return request("POST", "/users/create-manager", payload);

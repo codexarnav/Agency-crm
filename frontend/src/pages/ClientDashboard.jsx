@@ -16,8 +16,8 @@ import {
 import { getBrandAssetByClient, clientApproveTask, clientRejectTask } from "../services/api";
 
 function ClientDashboard({ setPage }) {
-  const { session, employees, showToast, tasks, refreshTasks, announcements } = useApp();
-  const allClients = LSUtils.getData(LS_KEYS.CLIENTS) || MOCK.clients;
+  const { session, employees, showToast, tasks, refreshTasks, announcements, clients } = useApp();
+  const allClients = clients && clients.length > 0 ? clients : MOCK.clients;
 
   // Determine which client this user is
   const clientRecord = allClients.find(c =>

@@ -9,12 +9,12 @@ import {
 import { ProdMBadge, PrioMBadge, TaskDetailDrawer } from "../shared/taskConstants";
 
 function ClientCalendarPage() {
-  const { session } = useApp();
-  const allClients = LSUtils.getData(LS_KEYS.CLIENTS) || MOCK.clients;
-  const employees = LSUtils.getData(LS_KEYS.EMPLOYEES) || MOCK.employees;
+  const { session, clients, employees, tasks } = useApp();
+  const allClients = clients && clients.length > 0 ? clients : MOCK.clients;
+  const allEmployees = employees && employees.length > 0 ? employees : MOCK.employees;
   const clientRecord = allClients.find(c => c.id === session?.id || c.email === session?.email || c.id === "client_1");
   const clientId = clientRecord?.id || "client_1";
-  const allTasks = (LSUtils.getData(LS_KEYS.TASKS) || MOCK.tasks).filter(t => t.clientId === clientId);
+  const allTasks = (tasks && tasks.length > 0 ? tasks : MOCK.tasks).filter(t => t.clientId === clientId);
   const today = new Date();
   const [curYear, setCurYear] = useState(today.getFullYear());
   const [curMonth, setCurMonth] = useState(today.getMonth());
@@ -62,7 +62,7 @@ function ClientCalendarPage() {
           })}
         </div>
       </div>
-      <TaskDetailDrawer task={selectedTask} open={drawerOpen} onClose={() => { setDrawerOpen(false); setSelectedTask(null); }} employees={employees} onStatusUpdate={() => { }} />
+      <TaskDetailDrawer task={selectedTask} open={drawerOpen} onClose={() => { setDrawerOpen(false); setSelectedTask(null); }} employees={allEmployees} onStatusUpdate={() => { }} />
     </div>
   );
 }

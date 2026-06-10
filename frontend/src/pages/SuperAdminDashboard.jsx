@@ -26,11 +26,77 @@ function SuperAdminDashboard({ setPage }) {
     return () => { active = false; };
   }, []);
 
+  const today = new Date();
+  const upcomingRenewals = clients.filter(c => {
+    if (!c.renewalDate) return false;
+    const rDate = new Date(c.renewalDate);
+    const diffDays = Math.ceil((rDate - today) / (1000 * 60 * 60 * 24));
+    return diffDays <= 30 && diffDays >= 0 && c.status === "active";
+  }).sort((a, b) => new Date(a.renewalDate) - new Date(b.renewalDate));
+
   return (
     <div className="fade-in">
       <RoleBanner session={session} />
       <AnnouncementBanner announcements={announcements} />
       <QuickActions role="superadmin" setPage={setPage} />
+
+      {/* Dynamic renewals widget */}
+      {upcomingRenewals.length > 0 && (
+        <div className="card" style={{ marginBottom: 24, border: "1.5px solid #FEF08A", background: "#FFFDF5" }}>
+          <div className="card-header" style={{ borderBottom: "1px solid #FEF08A", padding: "12px 20px" }}>
+            <span className="card-title" style={{ display: "flex", alignItems: "center", gap: 8, color: "#854D0E", margin: 0, fontSize: 14.5 }}>
+              ⏳ Upcoming Contract Renewals
+            </span>
+            <span className="badge badge-warning" style={{ color: "#854D0E", background: "#FEF08A" }}>
+              {upcomingRenewals.length} Alert{upcomingRenewals.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+          <div className="card-body" style={{ padding: "16px 20px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {upcomingRenewals.map(client => {
+                const rDate = new Date(client.renewalDate);
+                const days = Math.ceil((rDate - today) / (1000 * 60 * 60 * 24));
+                const assignedEmp = employees.find(e => e.id === client.assignedAM);
+                return (
+                  <div 
+                    key={client.id} 
+                    onClick={() => setPage("clients")}
+                    style={{ 
+                      display: "flex", 
+                      alignItems: "center", 
+                      justifyContent: "space-between", 
+                      padding: "10px 14px", 
+                      background: "#FFFFFF", 
+                      borderRadius: 8, 
+                      border: "1px solid #FDE047", 
+                      cursor: "pointer",
+                      transition: "all 0.15s ease"
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.05)"}
+                    onMouseLeave={e => e.currentTarget.style.boxShadow = "none"}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: 6, background: (client.brandColor || "#FF6A00") + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: client.brandColor || "var(--primary)" }}>
+                        {client.name.charAt(0)}
+                      </div>
+                      <div>
+                        <span style={{ fontWeight: 700, fontSize: 13, color: "var(--dark)" }}>{client.name}</span>
+                        <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>AM: {assignedEmp?.name || "Unassigned"}</div>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <span className="badge badge-warning" style={{ fontSize: 11, color: "#854D0E", background: "#FEF9C3", border: "1px solid #FEF08A" }}>
+                        Renews in {days} day{days !== 1 ? "s" : ""}
+                      </span>
+                      <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{rDate.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats */}
       <div className="grid-stats" style={{ marginBottom: 24 }}>

@@ -1,11 +1,10 @@
 // Clients Management Page
 import { useState, useEffect } from "react";
 import { useApp } from "../shared/AppContext";
-import { LS_KEYS, MOCK, CLIENT_STATUSES, CLIENT_INDUSTRIES, PLATFORM_OPTIONS, DELIVERABLE_TYPES } from "../shared/constants";
-import { LSUtils } from "../shared/utils";
+import { CLIENT_STATUSES, CLIENT_INDUSTRIES, PLATFORM_OPTIONS } from "../shared/constants";
 import {
-  SvgIcon, Btn, Avatar, StatusBadge, EmptyState, SearchBar,
-  FilterBar, Modal, FormInput, DataTable, ProgressBar, InfoRow,
+  SvgIcon, Btn, Avatar, EmptyState, SearchBar,
+  Modal, FormInput, DataTable, ProgressBar, InfoRow,
 } from "../shared/components";
 import { createClient as apiCreateClient, updateClient, deleteClient, getManagers } from "../services/api";
 
@@ -21,23 +20,134 @@ function clientStatusMeta(status) {
 }
 
 
+// Client helpers
+const getMonthsDiff = (startStr, renewalStr) => {
+  if (!startStr || !renewalStr) return "custom";
+  const start = new Date(startStr);
+  const renewal = new Date(renewalStr);
+  if (isNaN(start.getTime()) || isNaN(renewal.getTime())) return "custom";
+  const diffMonths = (renewal.getFullYear() - start.getFullYear()) * 12 + (renewal.getMonth() - start.getMonth());
+  return [1, 3, 6, 12, 24].includes(diffMonths) ? String(diffMonths) : "custom";
+};
+
+const calculateRenewalDate = (start, months) => {
+  if (!start || !months || months === "custom") return "";
+  const date = new Date(start);
+  date.setMonth(date.getMonth() + parseInt(months));
+  return date.toISOString().split("T")[0];
+};
+
+const formatDate = (dateStr) => {
+  if (!dateStr) return " - ";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  } catch {
+    return dateStr;
+  }
+};
+
+const blankClient = {
+  name: "", brandName: "", industry: "", contactPerson: "", email: "", phone: "",
+  assignedAM: "", assignedManager: "",
+  monthlyDeliverables: "", deliverableBreakdown: {
+    monthly: { "Video": 0, "Reel/Short": 0, "Static/Carousel": 0, "Story": 0, "Blog": 0, "Ad Creative": 0 },
+    setup: { "Website Setup": false, "Branding": false, "Analytics Setup": false, "Pixel Setup": false, "SEO Audit": false }
+  },
+  startDate: "",
+  contractDuration: "6",
+  renewalDate: "",
+  status: "active", platforms: [], notes: "",
+};
+
 // ClientFormModal
 function ClientFormModal({ open, onClose, initial, employees, managers, session, onSave }) {
   const role = session?.role || "employee";
-  const blank = {
-    name: "", brandName: "", industry: "", contactPerson: "", email: "", phone: "",
-    assignedAM: "", assignedManager: "",
-    monthlyDeliverables: "", deliverableBreakdown: {},
-    startDate: "", renewalDate: "",
-    status: "active", platforms: [], notes: "",
-  };
-  const [form, setForm] = useState(initial || blank);
-  const [errors, setErrors] = useState({});
-  useEffect(() => { setForm(initial || blank); setErrors({}); }, [open]);
 
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+  const getInitialForm = () => {
+    if (initial) {
+      let breakdown = { monthly: {}, setup: {} };
+      if (initial.deliverableBreakdown) {
+        if (initial.deliverableBreakdown.monthly) {
+          breakdown = { ...initial.deliverableBreakdown };
+        } else {
+          breakdown = { monthly: { ...initial.deliverableBreakdown }, setup: {} };
+        }
+      }
+      breakdown.monthly = {
+        "Video": 0, "Reel/Short": 0, "Static/Carousel": 0, "Story": 0, "Blog": 0, "Ad Creative": 0,
+        ...(breakdown.monthly || {})
+      };
+      breakdown.setup = {
+        "Website Setup": false, "Branding": false, "Analytics Setup": false, "Pixel Setup": false, "SEO Audit": false,
+        ...(breakdown.setup || {})
+      };
+      const calculatedDuration = getMonthsDiff(initial.startDate, initial.renewalDate);
+
+      return {
+        ...initial,
+        name: initial.companyName || initial.name || "",
+        phone: initial.phoneNumber || initial.phone || "",
+        deliverableBreakdown: breakdown,
+        contractDuration: calculatedDuration
+      };
+    } else {
+      const start = new Date().toISOString().split("T")[0];
+      return {
+        ...blankClient,
+        startDate: start,
+        contractDuration: "6",
+        renewalDate: calculateRenewalDate(start, "6"),
+      };
+    }
+  };
+
+  const [form, setForm] = useState(getInitialForm);
+  const [activeTab, setActiveTab] = useState("profile");
+  const [errors, setErrors] = useState({});
+  const [credentials, setCredentials] = useState(null);
+
+  const set = (k, v) => {
+    setForm(p => {
+      const next = { ...p, [k]: v };
+      if (k === "startDate" || k === "contractDuration") {
+        const calculated = calculateRenewalDate(next.startDate, next.contractDuration);
+        if (calculated) {
+          next.renewalDate = calculated;
+        }
+      }
+      return next;
+    });
+  };
+
   const togglePlatform = p => set("platforms", form.platforms.includes(p) ? form.platforms.filter(x => x !== p) : [...form.platforms, p]);
-  const setBreakdown = (type, val) => set("deliverableBreakdown", { ...form.deliverableBreakdown, [type]: parseInt(val) || 0 });
+
+  const setBreakdownMonthly = (type, val) => {
+    setForm(p => ({
+      ...p,
+      deliverableBreakdown: {
+        ...p.deliverableBreakdown,
+        monthly: {
+          ...(p.deliverableBreakdown?.monthly || {}),
+          [type]: parseInt(val) || 0
+        }
+      }
+    }));
+  };
+
+  const toggleBreakdownSetup = (type) => {
+    setForm(p => ({
+      ...p,
+      deliverableBreakdown: {
+        ...p.deliverableBreakdown,
+        setup: {
+          ...(p.deliverableBreakdown?.setup || {}),
+          [type]: !p.deliverableBreakdown?.setup?.[type]
+        }
+      }
+    }));
+  };
 
   const validate = () => {
     const e = {};
@@ -45,115 +155,276 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
     if (!form.email.trim()) e.email = "Email is required";
     else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = "Enter a valid email";
     if (!form.contactPerson.trim()) e.contactPerson = "Contact person is required";
-    setErrors(e); return Object.keys(e).length === 0;
+    setErrors(e);
+    if (e.name || e.contactPerson || e.email) {
+      setActiveTab("profile");
+    }
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSubmit = () => {
+    if (!validate()) return;
+    const monthlyTotal = Object.values(form.deliverableBreakdown?.monthly || {}).reduce((a, b) => a + (parseInt(b) || 0), 0);
+    const finalForm = {
+      ...form,
+      monthlyDeliverables: monthlyTotal || 30
+    };
+
+    if (!initial) {
+      const generatedUsername = form.email.split("@")[0] + "_" + Math.floor(Math.random() * 100);
+      setCredentials({
+        username: generatedUsername,
+        password: "Client123!",
+        name: form.name
+      });
+      onSave({ ...finalForm, username: generatedUsername, password: "Client123!" });
+    } else {
+      onSave(finalForm);
+    }
   };
 
   const accountManagers = employees.filter(e => e.designation === "Account Manager" || e.role === "accountmanager");
   const canAssignManager = role === "superadmin";
 
-  // Deliverable total vs breakdown
-  const breakdownTotal = Object.values(form.deliverableBreakdown || {}).reduce((a, v) => a + (parseInt(v) || 0), 0);
-  const monthlyTotal = parseInt(form.monthlyDeliverables) || 0;
-  const breakdownMismatch = monthlyTotal > 0 && breakdownTotal > 0 && breakdownTotal !== monthlyTotal;
+  const monthlyTypes = ["Video", "Reel/Short", "Static/Carousel", "Story", "Blog", "Ad Creative"];
+  const setupTypes = ["Website Setup", "Branding", "Analytics Setup", "Pixel Setup", "SEO Audit"];
+  const breakdownTotal = Object.values(form.deliverableBreakdown?.monthly || {}).reduce((a, v) => a + (parseInt(v) || 0), 0);
+
+  if (credentials) {
+    return (
+      <Modal open={open} onClose={onClose} size="md" title="Client Created Successfully 🎉"
+        footer={<div style={{ display: "flex", gap: 10 }}><Btn onClick={onClose}>Close & Refresh</Btn></div>}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "10px 0" }}>
+          <p style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.5 }}>
+            The workspace for <strong>{credentials.name}</strong> has been successfully initialized. Please share these login details with their team:
+          </p>
+          <div style={{ background: "#F3F4F6", borderRadius: 8, padding: 16, border: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+              <span style={{ fontWeight: 600, color: "var(--muted)" }}>Portal URL:</span>
+              <span style={{ fontWeight: 700, color: "var(--primary)" }}>{window.location.origin}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+              <span style={{ fontWeight: 600, color: "var(--muted)" }}>Username / Email:</span>
+              <span style={{ fontWeight: 700, color: "var(--dark)" }}>{credentials.username}</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+              <span style={{ fontWeight: 600, color: "var(--muted)" }}>Temporary Password:</span>
+              <span style={{ fontWeight: 700, color: "var(--dark)", fontFamily: "monospace" }}>{credentials.password}</span>
+            </div>
+          </div>
+          <p style={{ fontSize: 11.5, color: "var(--warning)", fontWeight: 600, display: "flex", gap: 4, alignItems: "center", marginTop: 4 }}>
+            ⚠️ Share these credentials securely. The client can change their password upon logging in.
+          </p>
+        </div>
+      </Modal>
+    );
+  }
 
   return (
     <Modal open={open} onClose={onClose} size="lg"
       title={initial ? "Edit Client" : "Add New Client"}
-      footer={<div style={{ display: "flex", gap: 10 }}><Btn variant="outline" onClick={onClose}>Cancel</Btn><Btn onClick={() => { if (validate()) onSave(form); }}>{initial ? "Save Changes" : "Add Client"}</Btn></div>}
+      footer={
+        <div style={{ display: "flex", width: "100%", gap: 10 }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            {activeTab === "contract" && <Btn variant="outline" onClick={() => setActiveTab("profile")}>Back</Btn>}
+            {activeTab === "deliverables" && <Btn variant="outline" onClick={() => setActiveTab("contract")}>Back</Btn>}
+          </div>
+          <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
+            <Btn variant="outline" onClick={onClose}>Cancel</Btn>
+            {activeTab === "profile" && <Btn onClick={() => setActiveTab("contract")}>Continue</Btn>}
+            {activeTab === "contract" && <Btn onClick={() => setActiveTab("deliverables")}>Continue</Btn>}
+            {activeTab === "deliverables" && <Btn onClick={handleSubmit}>{initial ? "Save Changes" : "Add Client"}</Btn>}
+          </div>
+        </div>
+      }
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-        <p style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>Basic Information</p>
-        <div className="grid-2">
-          <FormInput label="Client / Company Name *" value={form.name} onChange={e => set("name", e.target.value)} placeholder="e.g. Guardian Pharmacy" error={errors.name} />
-          <FormInput label="Brand Name" value={form.brandName} onChange={e => set("brandName", e.target.value)} placeholder="Brand display name" />
-        </div>
-        <div className="grid-2">
-          <div className="form-group">
-            <label className="form-label">Industry / Niche</label>
-            <select className="form-input" value={form.industry} onChange={e => set("industry", e.target.value)}>
-              <option value="">Select industry...</option>
-              {CLIENT_INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Client Status</label>
-            <select className="form-input" value={form.status} onChange={e => set("status", e.target.value)}>
-              {CLIENT_STATUSES.map(s => <option key={s} value={s}>{s.replace("_", " ").replace(/\b\w/g, c => c.toUpperCase())}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <div className="divider" style={{ margin: "4px 0 14px" }} />
-        <p style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>Contact Details</p>
-        <FormInput label="Contact Person Name *" value={form.contactPerson} onChange={e => set("contactPerson", e.target.value)} placeholder="Primary point of contact" error={errors.contactPerson} />
-        <div className="grid-2">
-          <FormInput label="Contact Email *" type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="client@company.com" error={errors.email} />
-          <FormInput label="Contact Phone" value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="+91 98000 00000" />
-        </div>
-
-        <div className="divider" style={{ margin: "4px 0 14px" }} />
-        <p style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>Assignment</p>
-        <div className="grid-2">
-          {canAssignManager && (
-            <div className="form-group">
-              <label className="form-label">Assigned Manager</label>
-              <select className="form-input" value={form.assignedManager} onChange={e => set("assignedManager", e.target.value)}>
-                <option value="">Select manager...</option>
-                {managers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
-            </div>
-          )}
-          <div className="form-group">
-            <label className="form-label">Assigned Account Manager</label>
-            <select className="form-input" value={form.assignedAM} onChange={e => set("assignedAM", e.target.value)}>
-              <option value="">Select AM...</option>
-              {accountManagers.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <div className="divider" style={{ margin: "4px 0 14px" }} />
-        <p style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>Selected Platforms</p>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
-          {PLATFORM_OPTIONS.map(p => (
-            <button key={p} type="button" onClick={() => togglePlatform(p)} className={`filter-chip ${form.platforms.includes(p) ? "active" : ""}`} style={{ fontSize: 12 }}>{p}</button>
+        <div style={{ display: "flex", gap: 6, borderBottom: "1.5px solid var(--border)", marginBottom: 20, paddingBottom: 8 }}>
+          {["profile", "contract", "deliverables"].map(t => (
+            <button
+              key={t}
+              type="button"
+              className={`filter-chip ${activeTab === t ? "active" : ""}`}
+              onClick={() => setActiveTab(t)}
+              style={{
+                fontSize: 13,
+                padding: "6px 14px",
+                borderRadius: 6,
+                border: "none",
+                cursor: "pointer",
+                fontWeight: 600,
+                background: activeTab === t ? "var(--light-orange)" : "transparent",
+                color: activeTab === t ? "var(--primary)" : "var(--muted)",
+                transition: "all 0.15s ease"
+              }}
+            >
+              {t === "profile" ? "💼 Client Profile" : t === "contract" ? "📅 Contract Details" : "🎯 Scope & Deliverables"}
+            </button>
           ))}
         </div>
 
-        <div className="divider" style={{ margin: "4px 0 14px" }} />
-        <p style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>Monthly Deliverables</p>
-        <div className="grid-2">
-          <FormInput label="Total Monthly Deliverables" type="number" value={form.monthlyDeliverables} onChange={e => set("monthlyDeliverables", e.target.value)} placeholder="e.g. 30" />
-          <div className="grid-2">
-            <FormInput label="Start Date" type="date" value={form.startDate} onChange={e => set("startDate", e.target.value)} />
-            <FormInput label="Renewal Date" type="date" value={form.renewalDate} onChange={e => set("renewalDate", e.target.value)} />
-          </div>
-        </div>
-
-        {/* Deliverable breakdown */}
-        <div className="form-group">
-          <label className="form-label">Deliverable Type Breakdown</label>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10 }}>
-            {DELIVERABLE_TYPES.map(type => (
-              <div key={type} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#F9FAFB", borderRadius: 8, border: "1px solid var(--border)" }}>
-                <span style={{ fontSize: 12.5, flex: 1, fontWeight: 600 }}>{type}</span>
-                <input type="number" min="0" value={form.deliverableBreakdown?.[type] || ""} onChange={e => setBreakdown(type, e.target.value)} placeholder="0" style={{ width: 50, padding: "3px 7px", borderRadius: 6, border: "1.5px solid var(--border)", fontSize: 12.5, textAlign: "center", outline: "none" }} onFocus={e => e.target.style.borderColor = "#FF6A00"} onBlur={e => e.target.style.borderColor = "var(--border)"} />
+        {activeTab === "profile" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }} className="fade-in">
+            <div className="grid-2">
+              <FormInput label="Client / Company Name *" value={form.name} onChange={e => set("name", e.target.value)} placeholder="e.g. Guardian Pharmacy" error={errors.name} />
+              <FormInput label="Brand Name" value={form.brandName} onChange={e => set("brandName", e.target.value)} placeholder="Brand display name" />
+            </div>
+            <div className="grid-2">
+              <div className="form-group">
+                <label className="form-label">Industry / Niche</label>
+                <select className="form-input" value={form.industry} onChange={e => set("industry", e.target.value)}>
+                  <option value="">Select industry...</option>
+                  {CLIENT_INDUSTRIES.map(i => <option key={i} value={i}>{i}</option>)}
+                </select>
               </div>
-            ))}
+              <FormInput label="Contact Person Name *" value={form.contactPerson} onChange={e => set("contactPerson", e.target.value)} placeholder="Primary point of contact" error={errors.contactPerson} />
+            </div>
+            <div className="grid-2">
+              <FormInput label="Contact Email *" type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="client@company.com" error={errors.email} />
+              <FormInput label="Contact Phone" value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="+91 98000 00000" />
+            </div>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}>
-            <span style={{ fontSize: 12, color: "var(--muted)" }}>Breakdown total: <strong>{breakdownTotal}</strong></span>
-            {breakdownMismatch && <span style={{ fontSize: 12, color: "var(--warning)", fontWeight: 600 }}>Warning: total is {monthlyTotal} but breakdown adds to {breakdownTotal}</span>}
-          </div>
-        </div>
+        )}
 
-        <FormInput label="Notes" type="textarea" value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Internal notes about this client..." />
+        {activeTab === "contract" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }} className="fade-in">
+            <div className="grid-2">
+              {canAssignManager && (
+                <div className="form-group">
+                  <label className="form-label">Assigned Manager</label>
+                  <select className="form-input" value={form.assignedManager} onChange={e => set("assignedManager", e.target.value)}>
+                    <option value="">Select manager...</option>
+                    {managers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </div>
+              )}
+              <div className="form-group">
+                <label className="form-label">Assigned Account Manager</label>
+                <select className="form-input" value={form.assignedAM} onChange={e => set("assignedAM", e.target.value)}>
+                  <option value="">Select AM...</option>
+                  {accountManagers.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="grid-2">
+              <div className="form-group">
+                <label className="form-label">Client Status</label>
+                <select className="form-input" value={form.status} onChange={e => set("status", e.target.value)}>
+                  {CLIENT_STATUSES.map(s => <option key={s} value={s}>{s.replace("_", " ").replace(/\b\w/g, c => c.toUpperCase())}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Start Date</label>
+                <input type="date" className="form-input" value={form.startDate ? form.startDate.split("T")[0] : ""} onChange={e => set("startDate", e.target.value)} />
+              </div>
+            </div>
+            <div className="grid-2">
+              <div className="form-group">
+                <label className="form-label">Contract Duration</label>
+                <select className="form-input" value={form.contractDuration} onChange={e => set("contractDuration", e.target.value)}>
+                  <option value="custom">Custom / Non-recurring</option>
+                  <option value="1">1 Month</option>
+                  <option value="3">3 Months</option>
+                  <option value="6">6 Months</option>
+                  <option value="12">12 Months (1 Year)</option>
+                  <option value="24">24 Months (2 Years)</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Renewal Date {form.contractDuration !== "custom" && "(Auto-calculated)"}</label>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={form.renewalDate ? form.renewalDate.split("T")[0] : ""}
+                  onChange={e => set("renewalDate", e.target.value)}
+                  disabled={form.contractDuration !== "custom"}
+                  style={{ background: form.contractDuration !== "custom" ? "#F3F4F6" : "#fff", cursor: form.contractDuration !== "custom" ? "not-allowed" : "text" }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "deliverables" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }} className="fade-in">
+            <div className="form-group" style={{ marginBottom: 4 }}>
+              <label className="form-label">Selected Platforms</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {PLATFORM_OPTIONS.map(p => (
+                  <button key={p} type="button" onClick={() => togglePlatform(p)} className={`filter-chip ${form.platforms.includes(p) ? "active" : ""}`} style={{ fontSize: 12 }}>{p}</button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginTop: 4 }}>
+              <div>
+                <p style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12 }}>Monthly Scope (Recurring)</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {monthlyTypes.map(type => (
+                    <div key={type} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#F9FAFB", borderRadius: 8, border: "1px solid var(--border)" }}>
+                      <span style={{ fontSize: 12.5, flex: 1, fontWeight: 600 }}>{type}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={form.deliverableBreakdown?.monthly?.[type] !== undefined ? form.deliverableBreakdown.monthly[type] : ""}
+                        onChange={e => setBreakdownMonthly(type, e.target.value)}
+                        placeholder="0"
+                        style={{ width: 60, padding: "4px 8px", borderRadius: 6, border: "1.5px solid var(--border)", fontSize: 12.5, textAlign: "center", outline: "none" }}
+                        onFocus={e => e.target.style.borderColor = "var(--primary)"}
+                        onBlur={e => e.target.style.borderColor = "var(--border)"}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12, fontSize: 13, fontWeight: 700, color: "var(--primary)" }}>
+                  <span>Total deliverables / month:</span>
+                  <span>{breakdownTotal}</span>
+                </div>
+              </div>
+
+              <div>
+                <p style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12 }}>Contract Setup Scope (One-time)</p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {setupTypes.map(type => {
+                    const checked = !!form.deliverableBreakdown?.setup?.[type];
+                    return (
+                      <div
+                        key={type}
+                        onClick={() => toggleBreakdownSetup(type)}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 12,
+                          padding: "10px 14px",
+                          background: checked ? "var(--light-orange)" : "#F9FAFB",
+                          borderRadius: 8,
+                          border: checked ? "1px solid rgba(255,106,0,0.3)" : "1px solid var(--border)",
+                          cursor: "pointer",
+                          transition: "all 0.15s ease"
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => { }}
+                          style={{ accentColor: "var(--primary)", cursor: "pointer" }}
+                        />
+                        <span style={{ fontSize: 13, fontWeight: 600, color: checked ? "var(--deep)" : "var(--dark)" }}>{type}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <FormInput label="Internal Setup Notes" type="textarea" value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Internal onboarding details or contract specifics..." />
+          </div>
+        )}
       </div>
     </Modal>
   );
 }
-
-
 
 // ClientDrawer
 function ClientDrawer({ client, open, onClose, tasks, employees, onEdit, canDelete, onDelete }) {
@@ -165,6 +436,23 @@ function ClientDrawer({ client, open, onClose, tasks, employees, onEdit, canDele
   const total = client.monthlyDeliverables ? parseInt(client.monthlyDeliverables) : 30;
   const pct = Math.min(100, Math.round((approved / Math.max(total, 1)) * 100));
   const assignedEmp = employees.find(e => e.id === client.assignedAM);
+
+  const today = new Date();
+  const renewalDate = client.renewalDate ? new Date(client.renewalDate) : null;
+  const daysLeft = renewalDate ? Math.ceil((renewalDate - today) / (1000 * 60 * 60 * 24)) : null;
+  const isNearRenewal = renewalDate && daysLeft <= 30 && daysLeft >= 0;
+
+  let monthlyBreakdown = {};
+  let setupBreakdown = {};
+
+  if (client.deliverableBreakdown) {
+    if (client.deliverableBreakdown.monthly) {
+      monthlyBreakdown = client.deliverableBreakdown.monthly;
+      setupBreakdown = client.deliverableBreakdown.setup || {};
+    } else {
+      monthlyBreakdown = client.deliverableBreakdown;
+    }
+  }
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 150 }} onClick={onClose}>
@@ -193,6 +481,15 @@ function ClientDrawer({ client, open, onClose, tasks, employees, onEdit, canDele
 
         {/* Scrollable body */}
         <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px" }}>
+          {isNearRenewal && (
+            <div style={{ background: "#FEF3C7", border: "1px solid #FCD34D", borderRadius: 8, padding: "10px 14px", marginBottom: 16, color: "#92400E", fontSize: 12.5, display: "flex", gap: 8, alignItems: "center", fontWeight: 500 }}>
+              <SvgIcon name="alert" size={14} color="#B45309" />
+              <span>
+                <strong>Contract Renewal:</strong> Renews in {daysLeft} day{daysLeft !== 1 ? "s" : ""} ({formatDate(client.renewalDate)}).
+              </span>
+            </div>
+          )}
+
           {/* Monthly deliverable progress */}
           <div style={{ background: "var(--light-orange)", borderRadius: 10, padding: "14px 16px", marginBottom: 20 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
@@ -220,21 +517,51 @@ function ClientDrawer({ client, open, onClose, tasks, employees, onEdit, canDele
             ))}
           </div>
 
-          {/* Details */}
-          <InfoRow label="Client ID" value={client.id} />
+          {Object.keys(monthlyBreakdown).length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <p style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 8, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Monthly Recurring Scope</p>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {Object.entries(monthlyBreakdown).map(([type, val]) => val > 0 && (
+                  <span key={type} className="badge badge-muted" style={{ padding: "6px 10px", borderRadius: 6, fontSize: 12, border: "1.5px solid var(--border)", display: "flex", gap: 6, alignItems: "center" }}>
+                    <span style={{ fontWeight: 800, color: "var(--primary)" }}>{val}</span> {type}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {Object.keys(setupBreakdown).length > 0 && (
+            <div style={{ marginBottom: 20 }}>
+              <p style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 8, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>One-Time Setup Status</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {Object.entries(setupBreakdown).map(([task, checked]) => (
+                  <div key={task} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "#F9FAFB", borderRadius: 8, border: "1px solid var(--border)" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: "50%", background: checked ? "#DCFCE7" : "#FEE2E2", color: checked ? "#16A34A" : "#EF4444" }}>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                        {checked ? <polyline points="20 6 9 17 4 12" /> : <><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></>}
+                      </svg>
+                    </div>
+                    <span style={{ fontSize: 12.5, fontWeight: 600, color: checked ? "var(--dark)" : "var(--muted)" }}>{task}</span>
+                    <span className={`badge ${checked ? "badge-success" : "badge-muted"}`} style={{ marginLeft: "auto", fontSize: 10.5 }}>{checked ? "Completed" : "Pending"}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="divider" style={{ margin: "10px 0 16px" }} />
           <InfoRow label="Contact Person" value={client.contactPerson} />
           <InfoRow label="Email" value={client.email} />
           <InfoRow label="Phone" value={client.phone} />
-          <InfoRow label="Login Access" value={client.loginAccessType || " - "} />
           <InfoRow label="Account Manager" value={assignedEmp?.name || client.assignedAM || " - "} />
           <InfoRow label="Package" value={client.packageName || " - "} />
           <InfoRow label="Deliverables / Month" value={client.monthlyDeliverables || " - "} />
-          <InfoRow label="Start Date" value={client.startDate || client.joinedAt || " - "} />
-          <InfoRow label="Renewal Date" value={client.renewalDate || " - "} />
+          <InfoRow label="Start Date" value={formatDate(client.startDate || client.joinedAt)} />
+          <InfoRow label="Renewal Date" value={formatDate(client.renewalDate)} />
 
           {/* Platforms */}
           {(client.platforms || []).length > 0 && (
-            <div style={{ marginBottom: 12 }}>
+            <div style={{ marginBottom: 12, marginTop: 12 }}>
               <p style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 6, fontWeight: 600 }}>Platforms</p>
               <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
                 {client.platforms.map(p => <span key={p} className="badge badge-orange" style={{ fontSize: 11 }}>{p}</span>)}
@@ -244,8 +571,8 @@ function ClientDrawer({ client, open, onClose, tasks, employees, onEdit, canDele
 
           {/* Notes */}
           {client.notes && (
-            <div style={{ marginTop: 4 }}>
-              <p style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 6, fontWeight: 600 }}>Notes</p>
+            <div style={{ marginTop: 12 }}>
+              <p style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 6, fontWeight: 600 }}>Internal Notes</p>
               <p style={{ fontSize: 13, color: "var(--dark)", lineHeight: 1.65, background: "#F9FAFB", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border)" }}>{client.notes}</p>
             </div>
           )}
@@ -265,94 +592,6 @@ function ClientDrawer({ client, open, onClose, tasks, employees, onEdit, canDele
 }
 
 
-// CreateClientModal — Real API integration
-function CreateClientModal({ open, onClose, onSuccess }) {
-  const [form, setForm] = useState({
-    username: "", companyName: "", email: "", phoneNumber: "", password: "", profilePicture: "",
-  });
-  const [errors, setErrors] = useState({});
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (open) {
-      setForm({ username: "", companyName: "", email: "", phoneNumber: "", password: "", profilePicture: "" });
-      setErrors({});
-      setLoading(false);
-    }
-  }, [open]);
-
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
-
-  const validate = () => {
-    const e = {};
-    if (!form.username.trim()) e.username = "Username is required";
-    if (!form.companyName.trim()) e.companyName = "Company name is required";
-    if (!form.email.trim()) e.email = "Email is required";
-    else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = "Enter a valid email";
-    if (!form.phoneNumber.trim()) e.phoneNumber = "Phone number is required";
-    if (!form.password.trim()) e.password = "Password is required";
-    else if (form.password.length < 6) e.password = "Password must be at least 6 characters";
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
-
-  const handleSubmit = async () => {
-    if (!validate()) return;
-    setLoading(true);
-    try {
-      await apiCreateClient({
-        username: form.username.trim(),
-        companyName: form.companyName.trim(),
-        email: form.email.trim(),
-        phoneNumber: form.phoneNumber.trim(),
-        password: form.password,
-        profilePicture: form.profilePicture.trim() || null,
-      });
-      onSuccess();
-    } catch (err) {
-      setErrors({ _api: err.message });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const Spinner = () => (
-    <span className="spin" style={{ display: "inline-block", width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "#fff", borderRadius: "50%" }} />
-  );
-
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Create Client"
-      footer={
-        <div style={{ display: "flex", gap: 10 }}>
-          <Btn variant="outline" onClick={onClose} disabled={loading}>Cancel</Btn>
-          <Btn onClick={handleSubmit} disabled={loading}>
-            {loading ? <><Spinner /> Creating...</> : "Create Client"}
-          </Btn>
-        </div>
-      }
-    >
-      <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-        {errors._api && (
-          <div style={{ background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 8, padding: "10px 14px", marginBottom: 14, color: "var(--danger)", fontSize: 13, display: "flex", gap: 8, alignItems: "center" }}>
-            <SvgIcon name="alert" size={14} color="var(--danger)" />{errors._api}
-          </div>
-        )}
-        <FormInput label="Username *" value={form.username} onChange={e => set("username", e.target.value)} placeholder="e.g. client_guardian" error={errors.username} />
-        <FormInput label="Company Name *" value={form.companyName} onChange={e => set("companyName", e.target.value)} placeholder="e.g. Guardian Pharmacy" error={errors.companyName} />
-        <div className="grid-2">
-          <FormInput label="Email *" type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="client@company.com" error={errors.email} />
-          <FormInput label="Phone Number *" value={form.phoneNumber} onChange={e => set("phoneNumber", e.target.value)} placeholder="+91 98000 00000" error={errors.phoneNumber} />
-        </div>
-        <FormInput label="Password *" type="password" value={form.password} onChange={e => set("password", e.target.value)} placeholder="Min 6 characters" error={errors.password} />
-        <FormInput label="Profile Picture URL" value={form.profilePicture} onChange={e => set("profilePicture", e.target.value)} placeholder="https://example.com/photo.jpg" hint="Optional — paste an image URL" />
-      </div>
-    </Modal>
-  );
-}
-
 
 // ClientsPage
 function ClientsPage() {
@@ -369,7 +608,6 @@ function ClientsPage() {
   const [editClient, setEditClient] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [createClientOpen, setCreateClientOpen] = useState(false);
 
   useEffect(() => {
     const loadManagers = async () => {
@@ -387,7 +625,6 @@ function ClientsPage() {
 
   const canDelete = role === "superadmin";
   const canAdd = role === "superadmin" || role === "manager";
-  const canCreateClient = role === "superadmin" || role === "manager";
 
   // Filter AM-specific clients
   const visibleClients = clients.filter(c => {
@@ -410,7 +647,7 @@ function ClientsPage() {
   const handleAdd = async (form) => {
     try {
       await apiCreateClient({
-        username: form.email.split("@")[0] + "_" + Math.floor(Math.random()*100),
+        username: form.email.split("@")[0] + "_" + Math.floor(Math.random() * 100),
         companyName: form.name,
         email: form.email,
         phoneNumber: form.phone || "0000000000",
@@ -500,7 +737,6 @@ function ClientsPage() {
               </button>
             ))}
           </div>
-          {canCreateClient && <Btn variant="outline" icon={<SvgIcon name="user" size={14} color="var(--primary)" />} onClick={() => setCreateClientOpen(true)}>Create Client</Btn>}
           {canAdd && <Btn icon={<SvgIcon name="arrowRight" size={14} color="#fff" />} onClick={() => setAddOpen(true)}>Add Client</Btn>}
         </div>
       </div>
@@ -533,15 +769,24 @@ function ClientsPage() {
           <DataTable
             columns={[
               {
-                key: "name", label: "Client", render: (v, row) => (
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: 8, background: (row.brandColor || "#FF6A00") + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: row.brandColor || "var(--primary)", flexShrink: 0 }}>{v.charAt(0)}</div>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 13.5 }}>{v}</div>
-                      <div style={{ fontSize: 11, color: "var(--muted)" }}>{row.brandName && row.brandName !== v ? row.brandName : row.industry}</div>
+                key: "name", label: "Client", render: (v, row) => {
+                  const today = new Date();
+                  const rDate = row.renewalDate ? new Date(row.renewalDate) : null;
+                  const days = rDate ? Math.ceil((rDate - today) / (1000 * 60 * 60 * 24)) : null;
+                  const near = rDate && days <= 30 && days >= 0;
+                  return (
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: 8, background: (row.brandColor || "#FF6A00") + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: row.brandColor || "var(--primary)", flexShrink: 0 }}>{v.charAt(0)}</div>
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ fontWeight: 700, fontSize: 13.5 }}>{v}</span>
+                          {near && <span className="badge badge-warning" style={{ fontSize: 10, padding: "1px 5px", color: "#854D0E", background: "#FEF9C3", border: "1px solid #FEF08A" }}>⏳ {days}d left</span>}
+                        </div>
+                        <div style={{ fontSize: 11, color: "var(--muted)" }}>{row.brandName && row.brandName !== v ? row.brandName : row.industry}</div>
+                      </div>
                     </div>
-                  </div>
-                )
+                  );
+                }
               },
               {
                 key: "contactPerson", label: "Contact", render: (v, row) => (
@@ -588,11 +833,17 @@ function ClientsPage() {
           {filtered.length === 0 ? (
             <div style={{ gridColumn: "1/-1" }}><EmptyState icon={<SvgIcon name="handshake" size={28} color="var(--primary)" />} title="No clients found" desc="Try adjusting your search or filter." /></div>
           ) : filtered.map(c => {
+            const today = new Date();
             const meta = clientStatusMeta(c.status);
             const ctasks = tasks.filter(t => t.clientId === c.id);
             const cpending = ctasks.filter(t => t.approvalStatus === "pending").length;
             const capproved = ctasks.filter(t => t.approvalStatus === "approved").length;
             const emp = employees.find(e => e.id === c.assignedAM);
+
+            const rDate = c.renewalDate ? new Date(c.renewalDate) : null;
+            const days = rDate ? Math.ceil((rDate - today) / (1000 * 60 * 60 * 24)) : null;
+            const near = rDate && days <= 30 && days >= 0;
+
             return (
               <div key={c.id} className="client-card" onClick={() => setDrawerClient(c)}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
@@ -617,6 +868,11 @@ function ClientsPage() {
                   {emp ? <div style={{ display: "flex", alignItems: "center", gap: 5 }}><Avatar name={emp.name || emp.username} size="sm" /><span style={{ fontSize: 11.5, color: "var(--muted)" }}>{(emp.name || emp.username || "").split(" ")[0]}</span></div> : <span />}
                   {cpending > 0 && <span className="badge badge-warning" style={{ fontSize: 10.5, display: "flex", alignItems: "center", gap: 3 }}><SvgIcon name="clock" size={10} color="#854D0E" />{cpending} pending</span>}
                 </div>
+                {near && (
+                  <div style={{ fontSize: 10.5, color: "#B45309", background: "#FEF3C7", border: "1px solid #FCD34D", borderRadius: 6, padding: "4px 8px", marginTop: 8, display: "flex", gap: 4, alignItems: "center", fontWeight: 500 }}>
+                    ⏳ Renews in {days} days ({formatDate(c.renewalDate)})
+                  </div>
+                )}
               </div>
             );
           })}
@@ -624,10 +880,30 @@ function ClientsPage() {
       )}
 
       {/* Add Client Modal */}
-      <ClientFormModal open={addOpen} onClose={() => setAddOpen(false)} initial={null} employees={employees} managers={managers} session={session} onSave={handleAdd} />
+      {addOpen && (
+        <ClientFormModal
+          open={addOpen}
+          onClose={() => setAddOpen(false)}
+          initial={null}
+          employees={employees}
+          managers={managers}
+          session={session}
+          onSave={handleAdd}
+        />
+      )}
 
       {/* Edit Client Modal */}
-      {editClient && <ClientFormModal open={!!editClient} onClose={() => setEditClient(null)} initial={editClient} employees={employees} managers={managers} session={session} onSave={handleEdit} />}
+      {editClient && (
+        <ClientFormModal
+          open={!!editClient}
+          onClose={() => setEditClient(null)}
+          initial={editClient}
+          employees={employees}
+          managers={managers}
+          session={session}
+          onSave={handleEdit}
+        />
+      )}
 
       {/* Client Detail Drawer */}
       <ClientDrawer
@@ -646,17 +922,6 @@ function ClientsPage() {
           Are you sure you want to delete <strong>{deleteTarget?.name}</strong>? This action cannot be undone and all associated data will be removed.
         </p>
       </Modal>
-
-      {/* Create Client Modal (API) */}
-      <CreateClientModal
-        open={createClientOpen}
-        onClose={() => setCreateClientOpen(false)}
-        onSuccess={() => {
-          showToast("Client created successfully!", "success");
-          setCreateClientOpen(false);
-          refreshClients();
-        }}
-      />
     </div>
   );
 }

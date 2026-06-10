@@ -56,6 +56,7 @@ function RoleLoginPage({ onLogin, onBack }) {
           companyId: user.companyId,
           companyName: "Your Agency",
           displayRole: ROLE_META[selectedRole]?.label || selectedRole,
+          profilePicture: user.profilePicture || "",
         };
         LSUtils.setCurrentSession(session);
         onLogin(session);
@@ -71,7 +72,7 @@ function RoleLoginPage({ onLogin, onBack }) {
       const lsUsers = LSUtils.getData(LS_KEYS.USERS) || [];
       const lsMatch = lsUsers.find(u => (u.email === username.trim() || u.username === username.trim()) && u.passwordHash === password);
       if (match) {
-        const session = { id: match.userId, name: match.name, email: match.username + "@agency.com", role: match.role, companyId: match.companyId, companyName: "Orbit Agency", displayRole: match.displayRole };
+        const session = { id: match.userId, name: match.name, email: match.username + "@agency.com", role: match.role, companyId: match.companyId, companyName: "Orbit Agency", displayRole: match.displayRole, profilePicture: match.profilePicture || "" };
         LSUtils.setCurrentSession(session);
         LSUtils.seedIfEmpty(LS_KEYS.CLIENTS, MOCK.clients);
         LSUtils.seedIfEmpty(LS_KEYS.EMPLOYEES, MOCK.employees);
@@ -82,7 +83,7 @@ function RoleLoginPage({ onLogin, onBack }) {
       } else if (lsMatch) {
         const companies = LSUtils.getData(LS_KEYS.COMPANIES) || [];
         const company = companies.find(c => c.id === lsMatch.companyId);
-        const session = { id: lsMatch.id, name: lsMatch.name, email: lsMatch.email, role: lsMatch.role, companyId: lsMatch.companyId, companyName: company?.name || "Your Agency" };
+        const session = { id: lsMatch.id, name: lsMatch.name, email: lsMatch.email, role: lsMatch.role, companyId: lsMatch.companyId, companyName: company?.name || "Your Agency", profilePicture: lsMatch.profilePicture || "" };
         LSUtils.setCurrentSession(session); onLogin(session);
       } else { setError("Incorrect username or password."); setLoading(false); }
     }, 900);
@@ -109,7 +110,7 @@ function RoleLoginPage({ onLogin, onBack }) {
             <h1 style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", fontWeight: 800, fontSize: 26, color: "#151515", marginBottom: 6 }}>Welcome back</h1>
             <p style={{ fontSize: 14, color: "var(--muted)" }}>Sign in to your AgencyFlow workspace</p>
           </div>
-          <div className="card" style={{ padding: 28 }}>
+          <div className="card" style={{ padding: 28, textAlign: "left" }}>
             <div style={{ marginBottom: 20 }}>
               <p style={{ fontSize: 13, fontWeight: 600, color: "var(--dark)", marginBottom: 10 }}>Sign in as</p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(80px, 1fr))", gap: 8 }}>

@@ -179,6 +179,8 @@ model User {
   employees      User[] @relation("ManagerEmployees")
 
   username       String
+  name           String?
+  dob            String?
 
   email          String
 
