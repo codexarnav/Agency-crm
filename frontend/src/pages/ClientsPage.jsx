@@ -152,11 +152,9 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
   const validate = () => {
     const e = {};
     if (!form.name.trim()) e.name = "Client name is required";
-    if (!form.email.trim()) e.email = "Email is required";
-    else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = "Enter a valid email";
     if (!form.contactPerson.trim()) e.contactPerson = "Contact person is required";
     setErrors(e);
-    if (e.name || e.contactPerson || e.email) {
+    if (e.name || e.contactPerson) {
       setActiveTab("profile");
     }
     return Object.keys(e).length === 0;
@@ -165,19 +163,31 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
   const handleSubmit = () => {
     if (!validate()) return;
     const monthlyTotal = Object.values(form.deliverableBreakdown?.monthly || {}).reduce((a, b) => a + (parseInt(b) || 0), 0);
+    
+    let emailVal = form.email;
+    let usernameVal = form.username;
+    
+    if (!initial) {
+      const cleanName = (form.name || "client").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const suffix = Math.floor(100 + Math.random() * 900);
+      usernameVal = `${cleanName}_${suffix}`;
+      emailVal = `${usernameVal}@agencyclient.com`;
+    }
+
     const finalForm = {
       ...form,
+      email: emailVal,
+      username: usernameVal,
       monthlyDeliverables: monthlyTotal || 30
     };
 
     if (!initial) {
-      const generatedUsername = form.email.split("@")[0] + "_" + Math.floor(Math.random() * 100);
       setCredentials({
-        username: generatedUsername,
+        username: usernameVal,
         password: "Client123!",
         name: form.name
       });
-      onSave({ ...finalForm, username: generatedUsername, password: "Client123!" });
+      onSave({ ...finalForm, password: "Client123!" });
     } else {
       onSave(finalForm);
     }
@@ -281,7 +291,6 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
               <FormInput label="Contact Person Name *" value={form.contactPerson} onChange={e => set("contactPerson", e.target.value)} placeholder="Primary point of contact" error={errors.contactPerson} />
             </div>
             <div className="grid-2">
-              <FormInput label="Contact Email *" type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="client@company.com" error={errors.email} />
               <FormInput label="Contact Phone" value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="+91 98000 00000" />
             </div>
           </div>

@@ -1,6 +1,10 @@
 // Centralized API Service Layer
 // Base URL is relative — Vite proxy forwards /api → http://localhost:5000
-const API_BASE = import.meta.env.VITE_API_URL || "/api";
+let baseUrl = import.meta.env.VITE_API_URL || "/api";
+if (baseUrl.startsWith("http") && !baseUrl.endsWith("/api") && !baseUrl.includes("/api/")) {
+  baseUrl = baseUrl.replace(/\/?$/, "/api");
+}
+const API_BASE = baseUrl;
 const TOKEN_KEY = "crm_auth_token";
 
 // ── Token helpers ──────────────────────────────────────────

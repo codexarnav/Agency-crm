@@ -1,5 +1,9 @@
 // API helper for backend integration
-const API_BASE = import.meta.env.VITE_API_URL || "/api";
+let baseUrl = import.meta.env.VITE_API_URL || "/api";
+if (baseUrl.startsWith("http") && !baseUrl.endsWith("/api") && !baseUrl.includes("/api/")) {
+  baseUrl = baseUrl.replace(/\/?$/, "/api");
+}
+const API_BASE = baseUrl;
 const TOKEN_KEY = "crm_auth_token";
 
 // ── Token helpers ──────────────────────────────────────────
