@@ -15,6 +15,108 @@ import {
   PROD_STATUSES_LIST, APPROV_STATUSES_LIST, PUB_STATUSES_LIST,
   PROD_LABELS_MAP, APPROV_LABELS_MAP, PUB_LABELS_MAP, PRIO_LABELS_MAP,
 } from "../shared/taskConstants";
+import * as XLSX from "xlsx";
+
+const FIELD_ALIASES = {
+  platform: ["platform", "channel", "social platform", "social media"],
+  postingDate: ["posting date", "date", "publish date", "post date", "schedule date", "publish on"],
+  contentType: ["content type", "type", "format", "post type"],
+  description: ["description", "caption", "content", "idea", "creative brief", "brief", "copy"],
+  assignedTo: ["assigned to", "owner", "employee", "team", "assignee", "responsible"],
+  priority: ["priority", "importance"],
+  deadline: ["deadline", "due date"],
+  status: ["status", "approval", "approval status"]
+};
+
+const PLANNER_FIELDS = [
+  { value: "platform", label: "Platform" },
+  { value: "postingDate", label: "Posting Date" },
+  { value: "contentType", label: "Content Type" },
+  { value: "description", label: "Description" },
+  { value: "priority", label: "Priority" },
+  { value: "assignedTo", label: "Assigned To" },
+  { value: "deadline", label: "Deadline" },
+  { value: "status", label: "Status" }
+];
+
+function normalizeHeader(str) {
+  if (!str) return "";
+  return String(str)
+    .toLowerCase()
+    .replace(/[_-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function findMatchedField(header) {
+  const norm = normalizeHeader(header);
+  for (const [field, aliases] of Object.entries(FIELD_ALIASES)) {
+    const normAliases = aliases.map(normalizeHeader);
+    if (normAliases.includes(norm)) {
+      return field;
+    }
+  }
+  return null;
+}
+
+function parseSpreadsheetDate(val) {
+  if (val === undefined || val === null || val === "") return null;
+  
+  if (val instanceof Date) {
+    if (!isNaN(val.getTime())) {
+      const y = val.getFullYear();
+      const m = String(val.getMonth() + 1).padStart(2, "0");
+      const d = String(val.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+    return null;
+  }
+
+  if (typeof val === "number" || (!isNaN(val) && !isNaN(parseFloat(val)))) {
+    const serial = parseFloat(val);
+    const utcDays = Math.floor(serial - 25569);
+    const dateObj = new Date(utcDays * 86400 * 1000);
+    const y = dateObj.getFullYear();
+    const m = String(dateObj.getMonth() + 1).padStart(2, "0");
+    const d = String(dateObj.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+
+  const str = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+    return str;
+  }
+
+  const d = new Date(str);
+  if (!isNaN(d.getTime())) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  }
+
+  const dm = str.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (dm) {
+    const p1 = parseInt(dm[1]);
+    const p2 = parseInt(dm[2]);
+    const year = parseInt(dm[3]);
+    let day = p1;
+    let month = p2;
+    if (p1 > 12) {
+      day = p1;
+      month = p2;
+    } else if (p2 > 12) {
+      day = p2;
+      month = p1;
+    } else {
+      day = p1;
+      month = p2;
+    }
+    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+
+  return null;
+}
 
 function MonthlyPlannerPage() {
   const { clients, employees, session, showToast, refreshTasks } = useApp();
@@ -28,6 +130,11 @@ function MonthlyPlannerPage() {
   const [importing, setImporting] = useState(false);
   const [bulkStatus, setBulkStatus] = useState("");
   const [bulkEmp, setBulkEmp] = useState("");
+
+  const [reviewModal, setReviewModal] = useState(false);
+  const [importHeaders, setImportHeaders] = useState([]);
+  const [importRows, setImportRows] = useState([]);
+  const [mappings, setMappings] = useState({});
 
   const client = clients.find(c => c.id === selClientId);
 
@@ -63,26 +170,181 @@ function MonthlyPlannerPage() {
   const toggleSel = id => setSelected(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const selAll = () => setSelected(rows.length === selected.size ? new Set() : new Set(rows.map(r => r.id)));
 
-  const importSample = () => {
+  const triggerExcelUpload = () => {
     if (!selClientId) { showToast("Select a client first.", "warning"); return; }
+    const fileEl = document.getElementById("excel-file-uploader");
+    if (fileEl) fileEl.click();
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
     setImporting(true);
-    setTimeout(() => {
-      const [yr, mo] = selMonth.split("-").map(Number);
-      const pad = n => String(n).padStart(2, "0");
-      const sample = [
-        { contentType: "Reel", platform: "Instagram", contentDescription: "Brand awareness Reel - 30 sec intro", priority: "high", postingDate: `${yr}-${pad(mo)}-05` },
-        { contentType: "Carousel", platform: "Instagram", contentDescription: "5-slide product showcase carousel", priority: "medium", postingDate: `${yr}-${pad(mo)}-08` },
-        { contentType: "Story", platform: "Instagram", contentDescription: "Behind-the-scenes story series", priority: "low", postingDate: `${yr}-${pad(mo)}-10` },
-        { contentType: "Static Post", platform: "Facebook", contentDescription: "Offer announcement graphic", priority: "medium", postingDate: `${yr}-${pad(mo)}-13` },
-        { contentType: "Short", platform: "YouTube", contentDescription: "Product spotlight short video", priority: "medium", postingDate: `${yr}-${pad(mo)}-16` },
-        { contentType: "Caption", platform: "Instagram", contentDescription: "Motivational caption for week 3", priority: "low", postingDate: `${yr}-${pad(mo)}-19` },
-        { contentType: "Reel", platform: "Instagram", contentDescription: "Client testimonial Reel", priority: "high", postingDate: `${yr}-${pad(mo)}-22` },
-        { contentType: "Carousel", platform: "LinkedIn", contentDescription: "Industry insights carousel", priority: "medium", postingDate: `${yr}-${pad(mo)}-25` },
-      ].map(r => makeRow({ ...r, day: calcDayName(r.postingDate), internalDeadline: calcInternalDeadline(r.postingDate, r.contentType, r.priority) }));
-      setRows(sample);
-      setImporting(false);
-      showToast("Sample plan imported  -  8 content ideas loaded.", "success");
-    }, 600);
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: "array" });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+        if (!jsonData || jsonData.length === 0) {
+          showToast("The uploaded file is empty.", "warning");
+          setImporting(false);
+          return;
+        }
+
+        let headerRowIdx = 0;
+        while (headerRowIdx < jsonData.length && 
+               (!jsonData[headerRowIdx] || 
+                jsonData[headerRowIdx].filter(x => x !== undefined && x !== null && String(x).trim() !== "").length === 0)) {
+          headerRowIdx++;
+        }
+
+        if (headerRowIdx >= jsonData.length) {
+          showToast("No valid columns or data found in the spreadsheet.", "warning");
+          setImporting(false);
+          return;
+        }
+
+        const headers = jsonData[headerRowIdx].map(h => h !== undefined && h !== null ? String(h).trim() : "");
+        const rawRows = jsonData.slice(headerRowIdx + 1);
+        const filteredRows = rawRows.filter(r => r && r.some(cell => cell !== undefined && cell !== null && String(cell).trim() !== ""));
+
+        if (filteredRows.length === 0) {
+          showToast("No data rows found below the header column.", "warning");
+          setImporting(false);
+          return;
+        }
+
+        const initialMapping = {};
+        headers.forEach(h => {
+          if (!h) return;
+          initialMapping[h] = findMatchedField(h) || "";
+        });
+
+        setImportHeaders(headers);
+        setImportRows(filteredRows);
+        setMappings(initialMapping);
+        setReviewModal(true);
+      } catch (err) {
+        showToast("Error reading spreadsheet: " + err.message, "danger");
+      } finally {
+        setImporting(false);
+        e.target.value = "";
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const updateMapping = (header, field) => {
+    setMappings(prev => ({ ...prev, [header]: field }));
+  };
+
+  const confirmExcelImport = () => {
+    if (!importHeaders.length || !importRows.length) return;
+    
+    let addedCount = 0;
+    const newPlannerRows = importRows.map(rowArr => {
+      const r = {};
+      r.platform = client?.platforms?.[0] || "Instagram";
+      r.postingDate = "";
+      r.day = "";
+      r.contentType = "Reel";
+      r.contentDescription = "";
+      r.captionCopy = "";
+      r.priority = "medium";
+      r.assignedEmployeeId = "";
+      r.assignedTo = "";
+      r.assignmentType = "manual";
+      r.internalDeadline = "";
+      r.productionStatus = "todo";
+      r.approvalStatus = "pending";
+      r.publishingStatus = "not_scheduled";
+      r.contentLink = "";
+      r.managerNotes = "";
+      r.clientFeedback = "";
+      r.revisionCount = 0;
+      r.maxRevisions = 2;
+
+      importHeaders.forEach((h, colIdx) => {
+        const field = mappings[h];
+        if (!field) return;
+
+        let val = rowArr[colIdx];
+        if (val === undefined || val === null) {
+          val = "";
+        } else {
+          val = String(val).trim();
+        }
+
+        if (field === "platform") {
+          r.platform = val || r.platform;
+        } else if (field === "postingDate") {
+          const parsedDate = parseSpreadsheetDate(val);
+          if (parsedDate) {
+            r.postingDate = parsedDate;
+            r.day = calcDayName(parsedDate);
+          }
+        } else if (field === "contentType") {
+          r.contentType = val || r.contentType;
+        } else if (field === "description") {
+          r.contentDescription = val;
+        } else if (field === "priority") {
+          const normPrio = val.toLowerCase();
+          if (["high", "medium", "low", "urgent"].includes(normPrio)) {
+            r.priority = normPrio;
+          } else {
+            r.priority = "medium";
+          }
+        } else if (field === "assignedTo") {
+          const emp = employees.find(e => {
+            const name = (e.name || "").toLowerCase();
+            const username = (e.username || "").toLowerCase();
+            const v = val.toLowerCase();
+            return name === v || username === v || name.includes(v) || v.includes(name);
+          });
+          if (emp) {
+            r.assignedEmployeeId = emp.id;
+            r.assignedTo = emp.name || emp.username || "";
+          } else {
+            r.assignedTo = val;
+          }
+        } else if (field === "deadline") {
+          const parsedDeadline = parseSpreadsheetDate(val);
+          r.internalDeadline = parsedDeadline || val;
+        } else if (field === "status") {
+          const normVal = val.toLowerCase();
+          if (normVal.includes("todo") || normVal === "to do") r.productionStatus = "todo";
+          else if (normVal.includes("progress")) r.productionStatus = "in_progress";
+          else if (normVal.includes("review")) r.productionStatus = "ready_for_review";
+          else if (normVal.includes("done") || normVal.includes("complete")) r.productionStatus = "completed";
+        }
+      });
+
+      if (r.postingDate && !r.internalDeadline) {
+        r.internalDeadline = calcInternalDeadline(r.postingDate, r.contentType, r.priority);
+      }
+
+      addedCount++;
+      return makeRow(r);
+    });
+
+    setRows(prev => [...prev, ...newPlannerRows]);
+    setReviewModal(false);
+    showToast(`Imported ${addedCount} content items successfully. Review before saving!`, "success");
+  };
+
+  const handleDownloadTemplate = () => {
+    const ws = XLSX.utils.aoa_to_sheet([
+      ["Platform", "Posting Date", "Day", "Content Type", "Description", "Priority", "Assigned To", "Deadline", "Status"],
+      ["Instagram", "2026-06-12", "Friday", "Reel", "Brand awareness Reel description", "High", "", "2026-06-11", "Todo"],
+      ["YouTube", "2026-06-15", "Monday", "Short", "Product showcase description", "Medium", "", "2026-06-14", "Todo"]
+    ]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Template");
+    XLSX.writeFile(wb, `${client?.name || "Client"}_Content_Plan_Template.xlsx`);
+    showToast("Template downloaded successfully.", "success");
   };
 
   const aiAssignAll = () => {
@@ -154,7 +416,12 @@ function MonthlyPlannerPage() {
           <p className="page-subtitle">Plan, assign, and save monthly content in a spreadsheet-like view.</p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <Btn variant="outline" size="sm" onClick={importSample} disabled={importing}>{importing ? "Importing..." : "Import Sample"}</Btn>
+          <Btn variant="outline" size="sm" onClick={handleDownloadTemplate}>
+            <SvgIcon name="download" size={13} /> Download Template
+          </Btn>
+          <Btn variant="outline" size="sm" onClick={triggerExcelUpload} disabled={importing}>
+            <SvgIcon name="upload" size={13} /> {importing ? "Uploading..." : "Upload Excel"}
+          </Btn>
           <Btn variant="outline" size="sm" style={{ borderColor: "#7C3AED", color: "#7C3AED" }} onClick={aiAssignAll}>
             <SvgIcon name="target" size={13} color="#7C3AED" /> AI Auto-Assign All
           </Btn>
@@ -221,7 +488,7 @@ function MonthlyPlannerPage() {
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={12} style={{ textAlign: "center", padding: "40px 20px", color: "var(--muted)", fontSize: 13.5 }}>No rows yet. Click <strong>+ Add Row</strong> or <strong>Import Sample</strong>.</td></tr>
+                <tr><td colSpan={12} style={{ textAlign: "center", padding: "40px 20px", color: "var(--muted)", fontSize: 13.5 }}>No rows yet. Click <strong>+ Add Row</strong> or <strong>Upload Excel</strong>.</td></tr>
               ) : rows.map((row, idx) => (
                 <tr key={row.id} style={{ background: selected.has(row.id) ? "#FFF8F0" : "", animation: "fadeIn 0.2s ease" }} onMouseEnter={e => { if (!selected.has(row.id)) e.currentTarget.style.background = "#FAFAFA"; }} onMouseLeave={e => { if (!selected.has(row.id)) e.currentTarget.style.background = ""; }}>
                   <td style={{ padding: "7px 10px" }}><input type="checkbox" checked={selected.has(row.id)} onChange={() => toggleSel(row.id)} /></td>
@@ -280,6 +547,124 @@ function MonthlyPlannerPage() {
       {/* Edit row modal */}
       {taskModal && editRowIdx !== null && rows[editRowIdx] && (
         <TaskCreateModal open={taskModal} onClose={() => { setTaskModal(false); setEditRowIdx(null); }} defaultClientId={selClientId} />
+      )}
+
+      {/* Hidden file input */}
+      <input
+        type="file"
+        id="excel-file-uploader"
+        accept=".xlsx,.xls,.csv"
+        onChange={handleFileUpload}
+        style={{ display: "none" }}
+      />
+
+      {/* Excel Review & Mapping Modal */}
+      {reviewModal && (
+        <Modal
+          open={reviewModal}
+          onClose={() => setReviewModal(false)}
+          title="Review Spreadsheet Import"
+          size="lg"
+          footer={
+            <div style={{ display: "flex", width: "100%", gap: 10, justifyContent: "flex-end" }}>
+              <Btn variant="outline" onClick={() => setReviewModal(false)}>Cancel</Btn>
+              <Btn onClick={confirmExcelImport}>Confirm Import</Btn>
+            </div>
+          }
+        >
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <p style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
+              We've analyzed your spreadsheet headers. Review the auto-detected mapping and adjust manually if needed.
+            </p>
+
+            {/* Match Cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+              <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#166534", textTransform: "uppercase" }}>Matched Columns</span>
+                <span style={{ fontSize: 22, fontWeight: 800, color: "#15803D" }}>
+                  {Object.entries(mappings).filter(([_, f]) => f !== "").length}
+                </span>
+              </div>
+              <div style={{ background: "#FEF3C7", border: "1px solid #FDE68A", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#92400E", textTransform: "uppercase" }}>Missing Planner Fields</span>
+                <span style={{ fontSize: 22, fontWeight: 800, color: "#D97706" }}>
+                  {PLANNER_FIELDS.filter(f => !Object.values(mappings).includes(f.value)).length}
+                </span>
+              </div>
+              <div style={{ background: "#F3F4F6", border: "1px solid #E5E7EB", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column", gap: 4 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: "#4B5563", textTransform: "uppercase" }}>Ignored / Extra</span>
+                <span style={{ fontSize: 22, fontWeight: 800, color: "#374151" }}>
+                  {Object.entries(mappings).filter(([_, f]) => f === "").length}
+                </span>
+              </div>
+            </div>
+
+            {/* Mappings Configurations */}
+            <div>
+              <h3 style={{ fontSize: 13, fontWeight: 700, color: "var(--dark)", marginBottom: 8 }}>Column Mapping Settings</h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: "240px", overflowY: "auto", border: "1px solid var(--border)", borderRadius: 8, padding: 10, background: "#FAFAFA" }}>
+                {importHeaders.map((h, idx) => {
+                  if (!h) return null;
+                  const currentVal = mappings[h] || "";
+                  return (
+                    <div key={h + "_" + idx} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "#fff", border: "1px solid var(--border)", borderRadius: 6 }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--dark)" }}>{h}</span>
+                        <span style={{ fontSize: 11, color: "var(--muted)" }}>Example: "{importRows[0]?.[idx] !== undefined ? String(importRows[0][idx]).slice(0, 30) : "-"}"</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 11.5, color: "var(--muted)" }}>maps to</span>
+                        <select
+                          value={currentVal}
+                          onChange={e => updateMapping(h, e.target.value)}
+                          style={{ padding: "5px 10px", borderRadius: 6, border: "1.5px solid var(--border)", fontSize: 12.5, outline: "none", background: currentVal ? "var(--light-orange)" : "#fff", color: currentVal ? "var(--primary)" : "var(--dark)", fontWeight: currentVal ? 700 : 500 }}
+                        >
+                          <option value="">Do not map (Ignore)</option>
+                          {PLANNER_FIELDS.map(f => (
+                            <option key={f.value} value={f.value}>{f.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* List Matched Details */}
+            <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>Summary of Mapping Status</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: "100px", overflowY: "auto", fontSize: 12.5 }}>
+                {Object.entries(mappings).map(([h, field]) => {
+                  if (!field) return null;
+                  const fieldLabel = PLANNER_FIELDS.find(f => f.value === field)?.label;
+                  return (
+                    <div key={h} style={{ color: "#16A34A", display: "flex", alignItems: "center", gap: 6, fontWeight: 500 }}>
+                      <span>✓</span>
+                      <span><strong>{fieldLabel}</strong> ← matched from "{h}"</span>
+                    </div>
+                  );
+                })}
+                {PLANNER_FIELDS.filter(f => !Object.values(mappings).includes(f.value)).map(f => (
+                  <div key={f.value} style={{ color: "#D97706", display: "flex", alignItems: "center", gap: 6, fontWeight: 500 }}>
+                    <span>⚠</span>
+                    <span><strong>{f.label}</strong> not found (will be blank)</span>
+                  </div>
+                ))}
+                {Object.entries(mappings).filter(([_, f]) => f === "").map(([h]) => (
+                  <div key={h} style={{ color: "#4B5563", display: "flex", alignItems: "center", gap: 6, fontWeight: 500 }}>
+                    <span>•</span>
+                    <span>Additional column detected & ignored: "{h}"</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <span style={{ fontSize: 11.5, color: "var(--muted)", textAlign: "right", marginTop: 4 }}>
+              Rows to import: <strong>{importRows.length}</strong>
+            </span>
+          </div>
+        </Modal>
       )}
     </div>
   );
