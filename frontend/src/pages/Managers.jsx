@@ -46,7 +46,11 @@ function CreateManagerModal({ open, onClose, onSuccess }) {
       const headers = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const res = await fetch("/api/upload", {
+      let baseUrl = import.meta.env.VITE_API_URL || "/api";
+      if (baseUrl.startsWith("http") && !baseUrl.endsWith("/api") && !baseUrl.includes("/api/")) {
+        baseUrl = baseUrl.replace(/\/?$/, "/api");
+      }
+      const res = await fetch(`${baseUrl}/upload`, {
         method: "POST",
         headers,
         body: formData,

@@ -104,7 +104,7 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
   };
 
   const [form, setForm] = useState(getInitialForm);
-  const [activeTab, setActiveTab] = useState("profile");
+  const [deliverableTab, setDeliverableTab] = useState("monthly");
   const [errors, setErrors] = useState({});
   const [credentials, setCredentials] = useState(null);
 
@@ -116,6 +116,8 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
         if (calculated) {
           next.renewalDate = calculated;
         }
+      } else if (k === "renewalDate") {
+        next.contractDuration = "custom";
       }
       return next;
     });
@@ -157,9 +159,6 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
       e.email = "Enter a valid email address";
     }
     setErrors(e);
-    if (e.name || e.contactPerson || e.email) {
-      setActiveTab("profile");
-    }
     return Object.keys(e).length === 0;
   };
 
@@ -244,49 +243,22 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
     <Modal open={open} onClose={onClose} size="lg"
       title={initial ? "Edit Client" : "Add New Client"}
       footer={
-        <div style={{ display: "flex", width: "100%", gap: 10 }}>
-          <div style={{ display: "flex", gap: 8 }}>
-            {activeTab === "contract" && <Btn variant="outline" onClick={() => setActiveTab("profile")}>Back</Btn>}
-            {activeTab === "deliverables" && <Btn variant="outline" onClick={() => setActiveTab("contract")}>Back</Btn>}
-          </div>
-          <div style={{ display: "flex", gap: 8, marginLeft: "auto" }}>
-            <Btn variant="outline" onClick={onClose}>Cancel</Btn>
-            {activeTab === "profile" && <Btn onClick={() => setActiveTab("contract")}>Continue</Btn>}
-            {activeTab === "contract" && <Btn onClick={() => setActiveTab("deliverables")}>Continue</Btn>}
-            {activeTab === "deliverables" && <Btn onClick={handleSubmit}>{initial ? "Save Changes" : "Add Client"}</Btn>}
-          </div>
+        <div style={{ display: "flex", width: "100%", gap: 10, justifyContent: "flex-end" }}>
+          <Btn variant="outline" onClick={onClose}>Cancel</Btn>
+          <Btn onClick={handleSubmit}>{initial ? "Save Changes" : "Add Client"}</Btn>
         </div>
       }
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-        <div style={{ display: "flex", gap: 6, borderBottom: "1.5px solid var(--border)", marginBottom: 20, paddingBottom: 8 }}>
-          {["profile", "contract", "deliverables"].map(t => (
-            <button
-              key={t}
-              type="button"
-              className={`filter-chip ${activeTab === t ? "active" : ""}`}
-              onClick={() => setActiveTab(t)}
-              style={{
-                fontSize: 13,
-                padding: "6px 14px",
-                borderRadius: 6,
-                border: "none",
-                cursor: "pointer",
-                fontWeight: 600,
-                background: activeTab === t ? "var(--light-orange)" : "transparent",
-                color: activeTab === t ? "var(--primary)" : "var(--muted)",
-                transition: "all 0.15s ease"
-              }}
-            >
-              {t === "profile" ? "💼 Client Profile" : t === "contract" ? "📅 Contract Details" : "🎯 Scope & Deliverables"}
-            </button>
-          ))}
-        </div>
-
-        {activeTab === "profile" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }} className="fade-in">
+      <div style={{ display: "flex", flexDirection: "column", gap: 24, maxHeight: "70vh", overflowY: "auto", paddingRight: 10 }}>
+        
+        {/* Section 1: Client Profile */}
+        <div>
+          <h3 style={{ fontSize: 13.5, fontWeight: 700, color: "var(--primary)", borderBottom: "1px solid var(--border)", paddingBottom: 6, marginBottom: 14, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            💼 Client Profile
+          </h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div className="grid-2">
-              <FormInput label="Client / Company Name *" value={form.name} onChange={e => set("name", e.target.value)} placeholder="e.g. Guardian Pharmacy" error={errors.name} />
+              <FormInput label="Client / Company Name *" value={form.name} onChange={e => set("name", e.target.value)} placeholder="Client or company name" error={errors.name} />
               <FormInput label="Brand Name" value={form.brandName} onChange={e => set("brandName", e.target.value)} placeholder="Brand display name" />
             </div>
             <div className="grid-2">
@@ -300,14 +272,18 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
               <FormInput label="Contact Person Name *" value={form.contactPerson} onChange={e => set("contactPerson", e.target.value)} placeholder="Primary point of contact" error={errors.contactPerson} />
             </div>
             <div className="grid-2">
-              <FormInput label="Contact Email" type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="client@company.com" error={errors.email} />
-              <FormInput label="Contact Phone" value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="+91 98000 00000" />
+              <FormInput label="Contact Email" type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="Email address" error={errors.email} />
+              <FormInput label="Contact Phone" value={form.phone} onChange={e => set("phone", e.target.value)} placeholder="Phone number" />
             </div>
           </div>
-        )}
+        </div>
 
-        {activeTab === "contract" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }} className="fade-in">
+        {/* Section 2: Contract Details */}
+        <div>
+          <h3 style={{ fontSize: 13.5, fontWeight: 700, color: "var(--primary)", borderBottom: "1px solid var(--border)", paddingBottom: 6, marginBottom: 14, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            📅 Contract Details
+          </h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             <div className="grid-2">
               {canAssignManager && (
                 <div className="form-group">
@@ -351,22 +327,25 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">Renewal Date {form.contractDuration !== "custom" && "(Auto-calculated)"}</label>
+                <label className="form-label">End Date {form.contractDuration !== "custom" && "(Auto-calculated)"}</label>
                 <input
                   type="date"
                   className="form-input"
                   value={form.renewalDate ? form.renewalDate.split("T")[0] : ""}
                   onChange={e => set("renewalDate", e.target.value)}
-                  disabled={form.contractDuration !== "custom"}
-                  style={{ background: form.contractDuration !== "custom" ? "#F3F4F6" : "#fff", cursor: form.contractDuration !== "custom" ? "not-allowed" : "text" }}
+                  style={{ background: "#fff", cursor: "text" }}
                 />
               </div>
             </div>
           </div>
-        )}
+        </div>
 
-        {activeTab === "deliverables" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }} className="fade-in">
+        {/* Section 3: Scope & Deliverables */}
+        <div>
+          <h3 style={{ fontSize: 13.5, fontWeight: 700, color: "var(--primary)", borderBottom: "1px solid var(--border)", paddingBottom: 6, marginBottom: 14, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            🎯 Scope & Deliverables
+          </h3>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div className="form-group" style={{ marginBottom: 4 }}>
               <label className="form-label">Selected Platforms</label>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -376,10 +355,54 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginTop: 4 }}>
-              <div>
+            {/* Segmented Toggle for Deliverables View */}
+            <div style={{ display: "flex", border: "1.5px solid var(--border)", borderRadius: 8, overflow: "hidden", width: "fit-content", marginBottom: 16 }}>
+              <button
+                type="button"
+                onClick={() => setDeliverableTab("monthly")}
+                style={{
+                  padding: "8px 16px",
+                  background: deliverableTab === "monthly" ? "var(--light-orange)" : "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  color: deliverableTab === "monthly" ? "var(--primary)" : "var(--muted)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  transition: "all 0.15s ease"
+                }}
+              >
+                <SvgIcon name="repeat" size={13} color={deliverableTab === "monthly" ? "var(--primary)" : "var(--muted)"} />
+                Monthly Scope
+              </button>
+              <button
+                type="button"
+                onClick={() => setDeliverableTab("contractual")}
+                style={{
+                  padding: "8px 16px",
+                  background: deliverableTab === "contractual" ? "var(--light-orange)" : "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  color: deliverableTab === "contractual" ? "var(--primary)" : "var(--muted)",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  transition: "all 0.15s ease"
+                }}
+              >
+                <SvgIcon name="checklist" size={13} color={deliverableTab === "contractual" ? "var(--primary)" : "var(--muted)"} />
+                Contractual Scope
+              </button>
+            </div>
+
+            {deliverableTab === "monthly" ? (
+              <div className="fade-in">
                 <p style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12 }}>Monthly Scope (Recurring)</p>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                   {monthlyTypes.map(type => (
                     <div key={type} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: "#F9FAFB", borderRadius: 8, border: "1px solid var(--border)" }}>
                       <span style={{ fontSize: 12.5, flex: 1, fontWeight: 600 }}>{type}</span>
@@ -401,10 +424,10 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
                   <span>{breakdownTotal}</span>
                 </div>
               </div>
-
-              <div>
+            ) : (
+              <div className="fade-in">
                 <p style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12 }}>Contract Setup Scope (One-time)</p>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                   {setupTypes.map(type => {
                     const checked = !!form.deliverableBreakdown?.setup?.[type];
                     return (
@@ -435,11 +458,14 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
                   })}
                 </div>
               </div>
-            </div>
+            )}
 
-            <FormInput label="Internal Setup Notes" type="textarea" value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Internal onboarding details or contract specifics..." />
+            <div style={{ marginTop: 14 }}>
+              <FormInput label="Internal Setup Notes" type="textarea" value={form.notes} onChange={e => set("notes", e.target.value)} placeholder="Internal onboarding details or contract specifics..." />
+            </div>
           </div>
-        )}
+        </div>
+
       </div>
     </Modal>
   );
@@ -504,7 +530,7 @@ function ClientDrawer({ client, open, onClose, tasks, employees, onEdit, canDele
             <div style={{ background: "#FEF3C7", border: "1px solid #FCD34D", borderRadius: 8, padding: "10px 14px", marginBottom: 16, color: "#92400E", fontSize: 12.5, display: "flex", gap: 8, alignItems: "center", fontWeight: 500 }}>
               <SvgIcon name="alert" size={14} color="#B45309" />
               <span>
-                <strong>Contract Renewal:</strong> Renews in {daysLeft} day{daysLeft !== 1 ? "s" : ""} ({formatDate(client.renewalDate)}).
+                <strong>Contract End Date:</strong> Ends in {daysLeft} day{daysLeft !== 1 ? "s" : ""} ({formatDate(client.renewalDate)}).
               </span>
             </div>
           )}
@@ -576,7 +602,7 @@ function ClientDrawer({ client, open, onClose, tasks, employees, onEdit, canDele
           <InfoRow label="Package" value={client.packageName || " - "} />
           <InfoRow label="Deliverables / Month" value={client.monthlyDeliverables || " - "} />
           <InfoRow label="Start Date" value={formatDate(client.startDate || client.joinedAt)} />
-          <InfoRow label="Renewal Date" value={formatDate(client.renewalDate)} />
+          <InfoRow label="End Date" value={formatDate(client.renewalDate)} />
 
           {/* Platforms */}
           {(client.platforms || []).length > 0 && (
@@ -889,7 +915,7 @@ function ClientsPage() {
                 </div>
                 {near && (
                   <div style={{ fontSize: 10.5, color: "#B45309", background: "#FEF3C7", border: "1px solid #FCD34D", borderRadius: 6, padding: "4px 8px", marginTop: 8, display: "flex", gap: 4, alignItems: "center", fontWeight: 500 }}>
-                    ⏳ Renews in {days} days ({formatDate(c.renewalDate)})
+                    ⏳ Ends in {days} days ({formatDate(c.renewalDate)})
                   </div>
                 )}
               </div>
