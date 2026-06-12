@@ -1,5 +1,7 @@
 import prisma from "../config/prisma.js";
 import { hashPassword } from "../../utils/hashpasswords.js";
+import { CreateActivityLog } from "./activity-log.service.js";
+import { sendOnboardingEmail } from "./email.service.js";
 
 function generateUsername(name, dob) {
     const cleanName = (name || "").toLowerCase().replace(/\s+/g, "");
@@ -55,7 +57,7 @@ export const CreateManager = async (
     const uname = name && dob ? generateUsername(name, dob) : (username || name || email.split("@")[0]);
     const pnum = phoneNumber || phone;
 
-    return await prisma.user.create({
+    const newUser = await prisma.user.create({
         data: {
             companyId:
                 loggedInUser.companyId,
@@ -67,6 +69,7 @@ export const CreateManager = async (
             phoneNumber: pnum,
 
             passwordHash,
+            mustChangePassword: true,
 
             profilePicture,
             designation,
@@ -78,6 +81,26 @@ export const CreateManager = async (
             role: "MANAGER",
         },
     });
+
+    await CreateActivityLog({
+        action: "manager_created",
+        entityType: "USER",
+        entityId: newUser.id,
+        userId: loggedInUser.id,
+        details: {
+            managerName: newUser.name || newUser.username,
+            managerEmail: newUser.email,
+        },
+    }).catch(err => console.error("Error creating activity log for manager creation:", err));
+
+    await sendOnboardingEmail(
+        newUser.name || newUser.username,
+        newUser.email,
+        "MANAGER",
+        password
+    );
+
+    return newUser;
 };
 
 export const CreateEmployee = async (
@@ -123,7 +146,7 @@ export const CreateEmployee = async (
     const uname = name && dob ? generateUsername(name, dob) : (username || name || email.split("@")[0]);
     const pnum = phoneNumber || phone;
 
-    return await prisma.user.create({
+    const newUser = await prisma.user.create({
         data: {
             companyId:
                 loggedInUser.companyId,
@@ -138,6 +161,7 @@ export const CreateEmployee = async (
             phoneNumber: pnum,
 
             passwordHash,
+            mustChangePassword: true,
 
             profilePicture,
             designation,
@@ -149,6 +173,26 @@ export const CreateEmployee = async (
             role: "EMPLOYEE",
         },
     });
+
+    await CreateActivityLog({
+        action: "employee_created",
+        entityType: "USER",
+        entityId: newUser.id,
+        userId: loggedInUser.id,
+        details: {
+            employeeName: newUser.name || newUser.username,
+            employeeEmail: newUser.email,
+        },
+    }).catch(err => console.error("Error creating activity log for employee creation:", err));
+
+    await sendOnboardingEmail(
+        newUser.name || newUser.username,
+        newUser.email,
+        "EMPLOYEE",
+        password
+    );
+
+    return newUser;
 };
 
 export const ListManagers = async (loggedInUser) => {

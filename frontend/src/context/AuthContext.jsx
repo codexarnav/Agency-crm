@@ -36,6 +36,7 @@ export function AuthProvider({ children }) {
           companyId: u.companyId,
           profilePicture: u.profilePicture,
           phoneNumber: u.phoneNumber,
+          mustChangePassword: u.mustChangePassword,
         });
       })
       .catch(() => {
@@ -66,6 +67,7 @@ export function AuthProvider({ children }) {
         companyId: backendUser.companyId,
         profilePicture: backendUser.profilePicture,
         phoneNumber: backendUser.phoneNumber,
+        mustChangePassword: backendUser.mustChangePassword,
       });
     }
   }, []);

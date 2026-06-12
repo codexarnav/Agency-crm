@@ -184,10 +184,11 @@ function WorkspacePage() {
       } else {
         if (form.accessType === "manager") {
           await createManager(payload);
+          showToast(`Manager "${form.name}" added successfully and login credentials have been emailed.`, "success");
         } else {
           await createEmployee(payload);
+          showToast(`User "${form.name}" added successfully and login credentials have been emailed.`, "success");
         }
-        showToast(`User "${form.name}" added successfully.`, "success");
       }
       if (refreshEmployees) refreshEmployees();
       fetchUsers();

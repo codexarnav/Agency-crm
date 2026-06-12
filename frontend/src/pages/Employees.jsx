@@ -178,7 +178,7 @@ function EmployeesPage() {
   }, [fetchEmployees]);
 
   const handleSuccess = () => {
-    showToast("Employee created successfully!", "success");
+    showToast("Employee created successfully and login credentials have been emailed.", "success");
     setModalOpen(false);
     fetchEmployees();
   };

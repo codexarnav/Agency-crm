@@ -57,6 +57,7 @@ function RoleLoginPage({ onLogin, onBack }) {
           companyName: "Your Agency",
           displayRole: ROLE_META[selectedRole]?.label || selectedRole,
           profilePicture: user.profilePicture || "",
+          mustChangePassword: user.mustChangePassword,
         };
         LSUtils.setCurrentSession(session);
         onLogin(session);

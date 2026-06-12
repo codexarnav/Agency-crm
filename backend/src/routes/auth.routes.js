@@ -1,7 +1,8 @@
 import express from 'express';
 import {
     signup,
-    login
+    login,
+    changePassword
 } from '../controllers/auth.controller.js';
 import { verifyToken } from '../../middleware/auth.middleware.js';
 
@@ -14,5 +15,6 @@ router.get("/me", verifyToken, (req, res) => {
         user: req.user,
     });
 })
+router.post('/change-password', verifyToken, changePassword);
 export default router
 

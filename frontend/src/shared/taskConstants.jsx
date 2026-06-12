@@ -11,7 +11,7 @@ import ScheduleModal from "../components/publishing/ScheduleModal";
 export const MAX_REVISIONS = 2;
 
 /* -- Shared status constants used by all module pages -- */
-const CONTENT_TYPES_LIST = ["Reel/Short", "Post", "Carousel", "Story", "YouTube Video"];
+const CONTENT_TYPES_LIST = ["Reel", "Short", "Post", "Carousel", "Story", "YouTube Video"];
 const PLATFORMS_LIST = ["Instagram", "Facebook", "LinkedIn", "YouTube", "Twitter"];
 const PRIORITIES_LIST = ["low", "medium", "high", "urgent"];
 const PROD_STATUSES_LIST = ["todo", "in_progress", "ready_for_review", "changes_required", "blocked", "completed"];

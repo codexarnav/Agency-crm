@@ -7,6 +7,7 @@ export const generateToken = (user) => {
             role: user.role,
             companyId: user.companyId,
             email: user.email,
+            mustChangePassword: user.mustChangePassword || false,
         },
         process.env.JWT_SECRET,
         {

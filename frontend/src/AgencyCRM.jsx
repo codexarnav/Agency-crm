@@ -9,6 +9,7 @@ import AppShell from "./layout/AppShell";
 import WelcomePage from "./pages/LandingPage";
 import CompanyRegistrationPage from "./pages/CompanyRegistrationPage";
 import RoleLoginPage from "./pages/RoleLoginPage";
+import OnboardingChangePasswordPage from "./pages/OnboardingChangePasswordPage";
 
 function AppInner() {
   const { user: authUser, loading: authLoading, logout: authLogout } = useAuth();
@@ -50,6 +51,7 @@ function AppInner() {
         companyName: "Your Agency",
         displayRole: ROLE_META[authUser.role]?.label || authUser.role,
         profilePicture: authUser.profilePicture || "",
+        mustChangePassword: authUser.mustChangePassword,
       };
       LSUtils.setCurrentSession(newSession);
       setSession(newSession);
@@ -125,7 +127,11 @@ function AppInner() {
       )}
 
       {screen === "app" && session && (
-        <AppShell session={session} logout={handleLogout} regToast={regToast} updateSession={updateSession} />
+        session.mustChangePassword === true ? (
+          <OnboardingChangePasswordPage session={session} updateSession={updateSession} logout={handleLogout} />
+        ) : (
+          <AppShell session={session} logout={handleLogout} regToast={regToast} updateSession={updateSession} />
+        )
       )}
     </>
   );

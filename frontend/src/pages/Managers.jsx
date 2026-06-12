@@ -179,7 +179,7 @@ function ManagersPage() {
   }, [fetchManagers]);
 
   const handleSuccess = () => {
-    showToast("Manager created successfully!", "success");
+    showToast("Manager created successfully and login credentials have been emailed.", "success");
     setModalOpen(false);
     fetchManagers();
   };

@@ -1,6 +1,7 @@
 import {
     registerCompanyAndSuperAdmin,
     loginUser,
+    updatePasswordAndClearChangeFlag,
 } from "../services/auth.service.js";
 
 export const signup = async (req, res) => {
@@ -41,5 +42,21 @@ export const login = async (
             message: error.message,
         });
 
+    }
+};
+
+export const changePassword = async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+        const userId = req.user.id;
+
+        const result = await updatePasswordAndClearChangeFlag(userId, currentPassword, newPassword);
+
+        return res.status(200).json(result);
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message,
+        });
     }
 };

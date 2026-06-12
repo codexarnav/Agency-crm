@@ -2,6 +2,7 @@ import prisma from "../config/prisma.js";
 import { hashPassword } from "../../utils/hashpasswords.js";
 import { generateToken } from "../../utils/generateToken.js";
 import { comparePassword } from "../../utils/comparepasswords.js";
+import { CreateActivityLog } from "./activity-log.service.js";
 export const registerCompanyAndSuperAdmin = async (data) => {
     const {
         companyName,
@@ -74,6 +75,7 @@ export const registerCompanyAndSuperAdmin = async (data) => {
                 role: "SUPER_ADMIN",
 
                 profilePicture,
+                mustChangePassword: false,
             },
         });
 
@@ -160,5 +162,51 @@ export const loginUser = async ({
         success: true,
         token,
         user,
+    };
+};
+
+export const updatePasswordAndClearChangeFlag = async (userId, currentPassword, newPassword) => {
+    const user = await prisma.user.findUnique({
+        where: { id: userId },
+    });
+
+    if (!user) {
+        throw new Error("User not found");
+    }
+
+    const isPasswordValid = await comparePassword(currentPassword, user.passwordHash);
+    if (!isPasswordValid) {
+        throw new Error("Invalid current password");
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+        throw new Error("New password must be at least 6 characters long");
+    }
+
+    const newPasswordHash = await hashPassword(newPassword);
+    const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: {
+            passwordHash: newPasswordHash,
+            mustChangePassword: false,
+        },
+    });
+
+    await CreateActivityLog({
+        action: "password_changed",
+        entityType: "USER",
+        entityId: userId,
+        userId: userId,
+        details: {
+            message: "Password changed during onboarding",
+        },
+    }).catch(err => console.error("Error creating activity log for password change:", err));
+
+    const token = generateToken(updatedUser);
+
+    return {
+        success: true,
+        token,
+        user: updatedUser,
     };
 };

@@ -57,3 +57,7 @@ export async function apiLogin(payload) {
 export async function apiGetMe() {
   return request("GET", "/auth/me");
 }
+
+export async function apiChangeOnboardingPassword(payload) {
+  return request("POST", "/auth/change-password", payload);
+}
