@@ -202,7 +202,7 @@ export const NAV_CONFIG = {
     {
       label: "User Management", items: [
         { id: "managers", label: "Managers", iconName: "shield" },
-        { id: "employees_mgmt", label: "Employees", iconName: "users" },
+        { id: "employees_mgmt", label: "Team", iconName: "users" },
       ]
     },
     {
@@ -244,7 +244,7 @@ export const NAV_CONFIG = {
     },
     {
       label: "User Management", items: [
-        { id: "employees_mgmt", label: "Employees", iconName: "users" },
+        { id: "employees_mgmt", label: "Team", iconName: "users" },
       ]
     },
     {

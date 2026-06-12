@@ -82,7 +82,6 @@ function CreateEmployeeModal({ open, onClose, onSuccess }) {
     if (!form.dob.trim()) e.dob = "Date of Birth is required";
     if (!form.email.trim()) e.email = "Email is required";
     else if (!/\S+@\S+\.\S+/.test(form.email)) e.email = "Enter a valid email";
-    if (!form.phoneNumber.trim()) e.phoneNumber = "Phone number is required";
     if (!form.password.trim()) e.password = "Password is required";
     else if (form.password.length < 6) e.password = "Password must be at least 6 characters";
     setErrors(e);
@@ -97,7 +96,7 @@ function CreateEmployeeModal({ open, onClose, onSuccess }) {
         name: form.name.trim(),
         dob: form.dob.trim(),
         email: form.email.trim(),
-        phoneNumber: form.phoneNumber.trim(),
+        phoneNumber: form.phoneNumber.trim() || null,
         password: form.password,
         profilePicture: form.profilePicture.trim() || null,
       });
@@ -140,7 +139,7 @@ function CreateEmployeeModal({ open, onClose, onSuccess }) {
           <span style={{ color: "var(--dark)" }}>{getGeneratedUsername()}</span>
         </div>
         <FormInput label="Email *" type="email" value={form.email} onChange={e => set("email", e.target.value)} placeholder="employee@company.com" error={errors.email} />
-        <FormInput label="Phone Number *" value={form.phoneNumber} onChange={e => set("phoneNumber", e.target.value)} placeholder="+91 98000 00000" error={errors.phoneNumber} />
+        <FormInput label="Phone Number" value={form.phoneNumber} onChange={e => set("phoneNumber", e.target.value)} placeholder="+91 98000 00000" error={errors.phoneNumber} />
         <FormInput label="Password *" type="password" value={form.password} onChange={e => set("password", e.target.value)} placeholder="Min 6 characters" error={errors.password} />
         <ImageUploadDropdown
           value={form.profilePicture}
@@ -199,8 +198,8 @@ function EmployeesPage() {
       {/* Header */}
       <div className="page-header flex-between" style={{ flexWrap: "wrap", gap: 12 }}>
         <div>
-          <h1 className="page-title">Employee Management</h1>
-          <p className="page-subtitle">{employees.length} employee{employees.length !== 1 ? "s" : ""} registered</p>
+          <h1 className="page-title">Team Management</h1>
+          <p className="page-subtitle">{employees.length} team member{employees.length !== 1 ? "s" : ""} registered</p>
         </div>
         <Btn icon={<SvgIcon name="arrowRight" size={14} color="#fff" />} onClick={() => setModalOpen(true)}>
           Create Employee

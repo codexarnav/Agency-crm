@@ -294,9 +294,9 @@ model Task {
 
   description String?
 
-  platform Platform
+  platform String
 
-  contentType ContentType
+  contentType String
 
   productionStatus ProductionStatus
 
@@ -436,7 +436,7 @@ model Report {
 
   reportMonth DateTime
 
-  platform Platform
+  platform String
 
   status ReportStatus
 
@@ -636,7 +636,7 @@ model PublishingJob {
   shootId String?
   shoot Shoot? @relation(fields: [shootId], references: [id])
 
-  platform Platform
+  platform String
 
   caption String?
 

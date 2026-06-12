@@ -494,18 +494,82 @@ function MonthlyPlannerPage() {
                   <td style={{ padding: "7px 10px" }}><input type="checkbox" checked={selected.has(row.id)} onChange={() => toggleSel(row.id)} /></td>
                   <td style={{ padding: "7px 10px", fontSize: 11.5, color: "#9CA3AF", textAlign: "center" }}>{idx + 1}</td>
                   <td style={{ padding: "7px 8px" }}>
-                    <select value={row.platform} onChange={e => upd(row.id, "platform", e.target.value)} style={{ width: "100%", padding: "5px 6px", border: "1.5px solid transparent", borderRadius: 6, fontSize: 12, fontFamily: "'DM Sans',sans-serif", background: "transparent", outline: "none", cursor: "pointer", minWidth: 100 }} onFocus={e => { e.target.style.borderColor = "#FF6A00"; e.target.style.background = "#fff"; }} onBlur={e => { e.target.style.borderColor = "transparent"; e.target.style.background = "transparent"; }}>
-                      {PLATFORMS_LIST.map(p => <option key={p} value={p}>{p}</option>)}
-                    </select>
+                    {PLATFORMS_LIST.includes(row.platform) ? (
+                      <select
+                        value={row.platform}
+                        onChange={e => {
+                          if (e.target.value === "Others") {
+                            upd(row.id, "platform", "");
+                          } else {
+                            upd(row.id, "platform", e.target.value);
+                          }
+                        }}
+                        style={{ width: "100%", padding: "5px 6px", border: "1.5px solid transparent", borderRadius: 6, fontSize: 12, fontFamily: "'DM Sans',sans-serif", background: "transparent", outline: "none", cursor: "pointer", minWidth: 100 }}
+                        onFocus={e => { e.target.style.borderColor = "#FF6A00"; e.target.style.background = "#fff"; }}
+                        onBlur={e => { e.target.style.borderColor = "transparent"; e.target.style.background = "transparent"; }}
+                      >
+                        {PLATFORMS_LIST.map(p => <option key={p} value={p}>{p}</option>)}
+                        <option value="Others">Others</option>
+                      </select>
+                    ) : (
+                      <div style={{ display: "flex", gap: 4, alignItems: "center", minWidth: 100 }}>
+                        <input
+                          value={row.platform}
+                          onChange={e => upd(row.id, "platform", e.target.value)}
+                          placeholder="Type platform..."
+                          style={{ width: "100%", padding: "5px 6px", border: "1.5px solid #FF6A00", borderRadius: 6, fontSize: 12, background: "#fff", outline: "none" }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => upd(row.id, "platform", PLATFORMS_LIST[0])}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 10, padding: 2 }}
+                          title="Select default"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
                   </td>
                   <td style={{ padding: "7px 8px" }}>
                     <input type="date" value={row.postingDate} onChange={e => upd(row.id, "postingDate", e.target.value)} style={{ width: "100%", padding: "5px 6px", border: "1.5px solid transparent", borderRadius: 6, fontSize: 12, fontFamily: "'DM Sans',sans-serif", background: "transparent", outline: "none", minWidth: 110 }} onFocus={e => { e.target.style.borderColor = "#FF6A00"; e.target.style.background = "#fff"; }} onBlur={e => { e.target.style.borderColor = "transparent"; e.target.style.background = "transparent"; }} />
                   </td>
                   <td style={{ padding: "7px 8px" }}><span style={{ fontSize: 12, color: "#374151", fontWeight: 500 }}>{row.day || " - "}</span></td>
                   <td style={{ padding: "7px 8px" }}>
-                    <select value={row.contentType} onChange={e => upd(row.id, "contentType", e.target.value)} style={{ padding: "5px 6px", border: "1.5px solid transparent", borderRadius: 6, fontSize: 12, fontFamily: "'DM Sans',sans-serif", background: "transparent", outline: "none", cursor: "pointer", minWidth: 110 }} onFocus={e => { e.target.style.borderColor = "#FF6A00"; e.target.style.background = "#fff"; }} onBlur={e => { e.target.style.borderColor = "transparent"; e.target.style.background = "transparent"; }}>
-                      {CONTENT_TYPES_LIST.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
+                    {CONTENT_TYPES_LIST.includes(row.contentType) ? (
+                      <select
+                        value={row.contentType}
+                        onChange={e => {
+                          if (e.target.value === "Others") {
+                            upd(row.id, "contentType", "");
+                          } else {
+                            upd(row.id, "contentType", e.target.value);
+                          }
+                        }}
+                        style={{ padding: "5px 6px", border: "1.5px solid transparent", borderRadius: 6, fontSize: 12, fontFamily: "'DM Sans',sans-serif", background: "transparent", outline: "none", cursor: "pointer", minWidth: 110 }}
+                        onFocus={e => { e.target.style.borderColor = "#FF6A00"; e.target.style.background = "#fff"; }}
+                        onBlur={e => { e.target.style.borderColor = "transparent"; e.target.style.background = "transparent"; }}
+                      >
+                        {CONTENT_TYPES_LIST.map(t => <option key={t} value={t}>{t}</option>)}
+                        <option value="Others">Others</option>
+                      </select>
+                    ) : (
+                      <div style={{ display: "flex", gap: 4, alignItems: "center", minWidth: 110 }}>
+                        <input
+                          value={row.contentType}
+                          onChange={e => upd(row.id, "contentType", e.target.value)}
+                          placeholder="Type content type..."
+                          style={{ width: "100%", padding: "5px 6px", border: "1.5px solid #FF6A00", borderRadius: 6, fontSize: 12, background: "#fff", outline: "none" }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => upd(row.id, "contentType", CONTENT_TYPES_LIST[0])}
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 10, padding: 2 }}
+                          title="Select default"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )}
                   </td>
                   <td style={{ padding: "7px 8px" }}>
                     <input value={row.contentDescription} onChange={e => upd(row.id, "contentDescription", e.target.value)} placeholder="Describe content..." style={{ width: "100%", minWidth: 180, padding: "5px 6px", border: "1.5px solid transparent", borderRadius: 6, fontSize: 12, fontFamily: "'DM Sans',sans-serif", background: "transparent", outline: "none" }} onFocus={e => { e.target.style.borderColor = "#FF6A00"; e.target.style.background = "#fff"; }} onBlur={e => { e.target.style.borderColor = "transparent"; e.target.style.background = "transparent"; }} />

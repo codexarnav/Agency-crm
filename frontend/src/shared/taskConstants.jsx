@@ -11,8 +11,8 @@ import ScheduleModal from "../components/publishing/ScheduleModal";
 export const MAX_REVISIONS = 2;
 
 /* -- Shared status constants used by all module pages -- */
-const CONTENT_TYPES_LIST = ["Reel", "Short", "Static Post", "Carousel", "Story", "YouTube Video", "Thumbnail", "Caption", "Content Idea", "Script", "Ad Creative", "Blog Post"];
-const PLATFORMS_LIST = ["Instagram", "Facebook", "YouTube", "LinkedIn", "Twitter/X", "Pinterest", "Google Ads", "Snapchat", "WhatsApp Business"];
+const CONTENT_TYPES_LIST = ["Reel/Short", "Post", "Carousel", "Story", "YouTube Video"];
+const PLATFORMS_LIST = ["Instagram", "Facebook", "LinkedIn", "YouTube", "Twitter"];
 const PRIORITIES_LIST = ["low", "medium", "high", "urgent"];
 const PROD_STATUSES_LIST = ["todo", "in_progress", "ready_for_review", "changes_required", "blocked", "completed"];
 const APPROV_STATUSES_LIST = ["pending", "manager_approved", "sent_to_client", "client_approved", "client_rejected", "final_approved"];
@@ -920,15 +920,67 @@ function TaskCreateModal({ open, onClose, defaultClientId = "" }) {
           </div>
           <div className="form-group">
             <label className="form-label">Platform</label>
-            <select className="form-input" value={form.platform} onChange={e => set("platform", e.target.value)}>
-              {PLATFORMS_LIST.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
+            {PLATFORMS_LIST.includes(form.platform) ? (
+              <select className="form-input" value={form.platform} onChange={e => {
+                if (e.target.value === "Others") {
+                  set("platform", "");
+                } else {
+                  set("platform", e.target.value);
+                }
+              }}>
+                {PLATFORMS_LIST.map(p => <option key={p} value={p}>{p}</option>)}
+                <option value="Others">Others</option>
+              </select>
+            ) : (
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input
+                  className="form-input"
+                  value={form.platform}
+                  onChange={e => set("platform", e.target.value)}
+                  placeholder="Type platform name..."
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  onClick={() => set("platform", PLATFORMS_LIST[0])}
+                  style={{ padding: "8px 12px", background: "none", border: "1.5px solid var(--border)", borderRadius: 8, cursor: "pointer", color: "var(--muted)" }}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
           </div>
           <div className="form-group">
             <label className="form-label">Content Type</label>
-            <select className="form-input" value={form.contentType} onChange={e => set("contentType", e.target.value)}>
-              {CONTENT_TYPES_LIST.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
+            {CONTENT_TYPES_LIST.includes(form.contentType) ? (
+              <select className="form-input" value={form.contentType} onChange={e => {
+                if (e.target.value === "Others") {
+                  set("contentType", "");
+                } else {
+                  set("contentType", e.target.value);
+                }
+              }}>
+                {CONTENT_TYPES_LIST.map(t => <option key={t} value={t}>{t}</option>)}
+                <option value="Others">Others</option>
+              </select>
+            ) : (
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input
+                  className="form-input"
+                  value={form.contentType}
+                  onChange={e => set("contentType", e.target.value)}
+                  placeholder="Type content type..."
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  onClick={() => set("contentType", CONTENT_TYPES_LIST[0])}
+                  style={{ padding: "8px 12px", background: "none", border: "1.5px solid var(--border)", borderRadius: 8, cursor: "pointer", color: "var(--muted)" }}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
           </div>
           <div className="grid-2">
             <div className="form-group">
