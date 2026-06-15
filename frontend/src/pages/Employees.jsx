@@ -5,7 +5,7 @@ import {
   SvgIcon, Btn, Avatar, EmptyState, SearchBar,
   Modal, FormInput, DataTable, ImageUploadDropdown,
 } from "../shared/components";
-import { getEmployees, createEmployee, getToken } from "../services/api";
+import { getEmployees, createEmployee, deleteUser, getToken } from "../services/api";
 
 // CreateEmployeeModal
 function CreateEmployeeModal({ open, onClose, onSuccess }) {
@@ -183,6 +183,17 @@ function EmployeesPage() {
     fetchEmployees();
   };
 
+  const handleDeleteEmployee = async (id, name) => {
+    if (!window.confirm(`Are you sure you want to delete team member "${name}"? This will also delete all their tasks, shoots, and notifications.`)) return;
+    try {
+      await deleteUser(id);
+      showToast(`Team member "${name}" deleted successfully.`, "success");
+      fetchEmployees();
+    } catch (err) {
+      showToast(err.message || "Failed to delete team member.", "danger");
+    }
+  };
+
   const filtered = employees.filter(m => {
     const q = search.toLowerCase();
     if (!q) return true;
@@ -255,6 +266,13 @@ function EmployeesPage() {
                   <span style={{ fontSize: 12.5, color: "var(--muted)" }}>
                     {v ? new Date(v).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" }) : "—"}
                   </span>
+                )
+              },
+              {
+                key: "actions", label: "Actions", render: (v, row) => (
+                  <Btn variant="danger" size="sm" onClick={() => handleDeleteEmployee(row.id, row.name || row.username)}>
+                    Delete
+                  </Btn>
                 )
               },
             ]}

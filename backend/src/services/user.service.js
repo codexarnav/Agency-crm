@@ -328,6 +328,136 @@ export const UpdateUser = async (id, data, loggedInUser) => {
 };
 
 export const DeleteUser = async (id, loggedInUser) => {
+    // 1. Delete notifications
+    await prisma.notification.deleteMany({
+        where: {
+            OR: [
+                { senderId: id },
+                { receiverId: id }
+            ]
+        }
+    });
+
+    // 2. Delete availability records
+    await prisma.employeeAvailability.deleteMany({
+        where: {
+            OR: [
+                { employeeId: id },
+                { createdById: id }
+            ]
+        }
+    });
+
+    // 3. Delete revisions for tasks associated with this user
+    await prisma.revision.deleteMany({
+        where: {
+            task: {
+                OR: [
+                    { managerId: id },
+                    { employeeId: id }
+                ]
+            }
+        }
+    });
+
+    // 4. Delete publishing jobs
+    await prisma.publishingJob.deleteMany({
+        where: {
+            OR: [
+                { managerId: id },
+                { task: { OR: [ { managerId: id }, { employeeId: id } ] } }
+            ]
+        }
+    });
+
+    // 5. Delete tasks
+    await prisma.task.deleteMany({
+        where: {
+            OR: [
+                { managerId: id },
+                { employeeId: id }
+            ]
+        }
+    });
+
+    // 6. Delete shoot scripts, crew, assets, shoots
+    await prisma.shootScript.deleteMany({
+        where: {
+            OR: [
+                { employeeId: id },
+                { shoot: { OR: [ { managerId: id }, { creativeLeadId: id } ] } }
+            ]
+        }
+    });
+
+    const shoots = await prisma.shoot.findMany({
+        where: {
+            OR: [
+                { managerId: id },
+                { creativeLeadId: id }
+            ]
+        },
+        select: { id: true }
+    });
+    const shootIds = shoots.map(s => s.id);
+
+    await prisma.shootCrew.deleteMany({
+        where: {
+            OR: [
+                { employeeId: id },
+                { shootId: { in: shootIds } }
+            ]
+        }
+    });
+
+    await prisma.shootAsset.deleteMany({
+        where: {
+            OR: [
+                { uploadedBy: id },
+                { shootId: { in: shootIds } }
+            ]
+        }
+    });
+
+    await prisma.shoot.deleteMany({
+        where: {
+            OR: [
+                { managerId: id },
+                { creativeLeadId: id }
+            ]
+        }
+    });
+
+    // 7. Delete announcements
+    await prisma.announcement.deleteMany({
+        where: {
+            OR: [
+                { createdById: id },
+                { specificEmployeeId: id }
+            ]
+        }
+    });
+
+    // 8. Delete reports
+    await prisma.report.deleteMany({
+        where: {
+            managerId: id
+        }
+    });
+
+    // 9. Update clients managed by this user (unlink them)
+    await prisma.client.updateMany({
+        where: { managerId: id },
+        data: { managerId: null }
+    });
+
+    // 10. Update employees managed by this user (unlink them)
+    await prisma.user.updateMany({
+        where: { managerId: id },
+        data: { managerId: null }
+    });
+
+    // Finally delete user
     return await prisma.user.delete({
         where: { id },
     });

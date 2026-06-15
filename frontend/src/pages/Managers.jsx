@@ -5,7 +5,7 @@ import {
   SvgIcon, Btn, Avatar, StatusBadge, EmptyState, SearchBar,
   Modal, FormInput, DataTable, ImageUploadDropdown,
 } from "../shared/components";
-import { getManagers, createManager, getToken } from "../services/api";
+import { getManagers, createManager, deleteUser, getToken } from "../services/api";
 
 // CreateManagerModal
 function CreateManagerModal({ open, onClose, onSuccess }) {
@@ -184,6 +184,17 @@ function ManagersPage() {
     fetchManagers();
   };
 
+  const handleDeleteManager = async (id, name) => {
+    if (!window.confirm(`Are you sure you want to delete manager "${name}"? This will also delete all their tasks, shoots, and notifications.`)) return;
+    try {
+      await deleteUser(id);
+      showToast(`Manager "${name}" deleted successfully.`, "success");
+      fetchManagers();
+    } catch (err) {
+      showToast(err.message || "Failed to delete manager.", "danger");
+    }
+  };
+
   const filtered = managers.filter(m => {
     const q = search.toLowerCase();
     if (!q) return true;
@@ -256,6 +267,13 @@ function ManagersPage() {
                   <span style={{ fontSize: 12.5, color: "var(--muted)" }}>
                     {v ? new Date(v).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" }) : "—"}
                   </span>
+                )
+              },
+              {
+                key: "actions", label: "Actions", render: (v, row) => (
+                  <Btn variant="danger" size="sm" onClick={() => handleDeleteManager(row.id, row.name || row.username)}>
+                    Delete
+                  </Btn>
                 )
               },
             ]}
