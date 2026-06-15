@@ -1,5 +1,7 @@
 import prisma from "../config/prisma.js";
 import { hashPassword } from "../../utils/hashpasswords.js";
+import { sendOnboardingEmail } from "./email.service.js";
+import crypto from "crypto";
 
 export const createClient = async (data, loggedInUser) => {
     const {
@@ -7,7 +9,6 @@ export const createClient = async (data, loggedInUser) => {
         companyName,
         email,
         phoneNumber,
-        password,
         profilePicture,
         brandColor,
         brandName,
@@ -34,7 +35,9 @@ export const createClient = async (data, loggedInUser) => {
         throw new Error("Client already exists");
     }
 
-    const passwordHash = await hashPassword(password);
+    // Auto-generate a secure temporary password
+    const temporaryPassword = crypto.randomBytes(4).toString("hex"); // e.g. "a3f7c2b1"
+    const passwordHash = await hashPassword(temporaryPassword);
 
     const client = await prisma.client.create({
         data: {
@@ -45,6 +48,7 @@ export const createClient = async (data, loggedInUser) => {
             email,
             phoneNumber,
             passwordHash,
+            mustChangePassword: true,
             profilePicture,
             brandColor,
             brandName,
@@ -61,6 +65,15 @@ export const createClient = async (data, loggedInUser) => {
             notes: notes || null
         },
     });
+
+    // Send onboarding email with temporary credentials
+    console.log(`[VERIFICATION] Generated temporary password for ${email}: ${temporaryPassword}`);
+    await sendOnboardingEmail(
+        contactPerson || companyName || username,
+        email,
+        "CLIENT",
+        temporaryPassword
+    ).catch(err => console.error("Error sending client onboarding email:", err));
 
     return {
         id: client.id,

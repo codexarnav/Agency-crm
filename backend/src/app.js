@@ -19,6 +19,8 @@ import revisionRoutes from "./routes/revision.routes.js";
 import shootRoutes from "./routes/shoot.routes.js";
 import publishingRoutes from "./routes/publishing.routes.js";
 import settingsRoutes from "./routes/settings.routes.js";
+import authMetaRoutes from "./routes/authMeta.routes.js";
+import socialRoutes from "./routes/social.routes.js";
 
 import upload from "../middleware/upload.middleware.js";
 import { uploadToCloudinary } from "../utils/uploadToCloudinary.js";
@@ -34,7 +36,9 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+app.use("/auth", authMetaRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/social", socialRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/clients", clientRoutes);
 app.use("/api/task", taskRoutes);

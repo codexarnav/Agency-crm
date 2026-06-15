@@ -123,6 +123,11 @@ export const loginUser = async ({
             },
         });
 
+        // Attach role for token generation (Client model has no role column)
+        if (user) {
+            user = { ...user, role: "CLIENT" };
+        }
+
     } else {
 
         user = await prisma.user.findFirst({
@@ -165,10 +170,29 @@ export const loginUser = async ({
     };
 };
 
-export const updatePasswordAndClearChangeFlag = async (userId, currentPassword, newPassword) => {
-    const user = await prisma.user.findUnique({
-        where: { id: userId },
-    });
+export const updatePasswordAndClearChangeFlag = async (userId, currentPassword, newPassword, userRole) => {
+    // Try User table first, then Client table
+    let user = null;
+    let isClient = false;
+
+    if (userRole === "CLIENT") {
+        user = await prisma.client.findUnique({
+            where: { id: userId },
+        });
+        isClient = true;
+    } else {
+        user = await prisma.user.findUnique({
+            where: { id: userId },
+        });
+    }
+
+    // Fallback: if not found in expected table, check the other
+    if (!user && !isClient) {
+        user = await prisma.client.findUnique({
+            where: { id: userId },
+        });
+        if (user) isClient = true;
+    }
 
     if (!user) {
         throw new Error("User not found");
@@ -184,17 +208,29 @@ export const updatePasswordAndClearChangeFlag = async (userId, currentPassword, 
     }
 
     const newPasswordHash = await hashPassword(newPassword);
-    const updatedUser = await prisma.user.update({
-        where: { id: userId },
-        data: {
-            passwordHash: newPasswordHash,
-            mustChangePassword: false,
-        },
-    });
+
+    let updatedUser;
+    if (isClient) {
+        updatedUser = await prisma.client.update({
+            where: { id: userId },
+            data: {
+                passwordHash: newPasswordHash,
+                mustChangePassword: false,
+            },
+        });
+    } else {
+        updatedUser = await prisma.user.update({
+            where: { id: userId },
+            data: {
+                passwordHash: newPasswordHash,
+                mustChangePassword: false,
+            },
+        });
+    }
 
     await CreateActivityLog({
         action: "password_changed",
-        entityType: "USER",
+        entityType: isClient ? "CLIENT" : "USER",
         entityId: userId,
         userId: userId,
         details: {
@@ -209,4 +245,4 @@ export const updatePasswordAndClearChangeFlag = async (userId, currentPassword, 
         token,
         user: updatedUser,
     };
-};
+};

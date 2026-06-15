@@ -49,8 +49,9 @@ export const changePassword = async (req, res) => {
     try {
         const { currentPassword, newPassword } = req.body;
         const userId = req.user.id;
+        const userRole = req.user.role;
 
-        const result = await updatePasswordAndClearChangeFlag(userId, currentPassword, newPassword);
+        const result = await updatePasswordAndClearChangeFlag(userId, currentPassword, newPassword, userRole);
 
         return res.status(200).json(result);
     } catch (error) {

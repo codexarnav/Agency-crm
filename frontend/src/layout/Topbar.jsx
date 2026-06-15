@@ -364,6 +364,11 @@ function Topbar({ page, setMobileOpen, setPage }) {
               <button className="dropdown-item" onClick={() => { setPassModalOpen(true); setShowUser(false); }}>
                 <SvgIcon name="lock" size={15} color="var(--muted)" /> Change Password
               </button>
+              {session?.role === "client" && (
+                <button className="dropdown-item" onClick={() => { setPage("settings_social"); setShowUser(false); }}>
+                  <SvgIcon name="globe" size={15} color="var(--muted)" /> Connect Social Accounts
+                </button>
+              )}
               <div className="dropdown-divider" />
               <button className="dropdown-item danger" onClick={logout}>
                 <SvgIcon name="logout" size={15} color="var(--danger)" /> Sign Out

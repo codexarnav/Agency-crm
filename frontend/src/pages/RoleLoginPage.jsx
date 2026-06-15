@@ -19,6 +19,7 @@ function RoleLoginPage({ onLogin, onBack }) {
     superadmin: "SUPER_ADMIN",
     manager: "MANAGER",
     employee: "EMPLOYEE",
+    client: "CLIENT",
   };
 
   const autofill = (cred) => { setSelectedRole(cred.role); setUsername(cred.username); setPassword(cred.password); setError(""); };
@@ -28,10 +29,8 @@ function RoleLoginPage({ onLogin, onBack }) {
     if (!username.trim() || !password.trim()) { setError("Please enter your username and password."); return; }
     setLoading(true);
 
-    // For superadmin: try real API login first, then fall back to demo
-    // For manager/employee: try real API login first, then fall back to demo
-    // For client: demo only (no passwordHash in DB)
-    const canUseApi = selectedRole && selectedRole !== "client" && roleToBackend[selectedRole];
+    // Try real API login first for all roles, then fall back to demo credentials
+    const canUseApi = selectedRole && roleToBackend[selectedRole];
 
     if (canUseApi) {
       try {

@@ -428,3 +428,16 @@ export async function getManagersPerformance() {
   return request("GET", "/users/managers/performance");
 }
 
+// ── Social Integrations API ──────────────────────────────────
+export async function getSocialConnections() {
+  return request("GET", "/social/connections");
+}
+
+export async function disconnectFacebook() {
+  return request("DELETE", "/social/connections/facebook");
+}
+
+export async function disconnectInstagram() {
+  return request("DELETE", "/social/connections/instagram");
+}
+

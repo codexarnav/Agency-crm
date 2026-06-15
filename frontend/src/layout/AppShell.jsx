@@ -39,9 +39,27 @@ import ComingSoonPage from "../pages/ComingSoonPage";
 import ShootsPage from "../pages/ShootsPage";
 import PublishingQueue from "../pages/PublishingQueue";
 import SettingsPage from "../pages/SettingsPage";
+import ClientSocialOnboardingPage from "../pages/ClientSocialOnboardingPage";
 
 function AppShell({ session, logout, updateSession }) {
-  const [page, setPage] = useState("dashboard");
+  const [page, setPage] = useState(() => {
+    if (window.location.pathname === "/client/settings/social") {
+      return "settings_social";
+    }
+    return "dashboard";
+  });
+
+  useEffect(() => {
+    if (page === "settings_social") {
+      if (window.location.pathname !== "/client/settings/social") {
+        window.history.pushState({}, "", "/client/settings/social");
+      }
+    } else {
+      if (window.location.pathname === "/client/settings/social") {
+        window.history.pushState({}, "", "/");
+      }
+    }
+  }, [page]);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [toasts, setToasts] = useState([]);
 
@@ -245,6 +263,7 @@ function AppShell({ session, logout, updateSession }) {
         if (role !== "superadmin" && role !== "manager") { setPage("dashboard"); return null; }
         return <PublishingQueue />;
       case "shoots": return <ShootsPage />;
+      case "settings_social": return <ClientSocialOnboardingPage />;
       case "settings": return <SettingsPage />;
       default: return <ComingSoonPage title={(NAV_CONFIG[role] || []).flatMap(s => s.items).find(i => i.id === page)?.label || page} />;
     }

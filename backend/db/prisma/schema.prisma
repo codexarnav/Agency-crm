@@ -245,6 +245,7 @@ model Client {
   profilePicture String?
 
   isActive       Boolean @default(true)
+  mustChangePassword Boolean @default(true)
 
   managerId      String?
   manager        User?    @relation("ManagerClients", fields: [managerId], references: [id])
@@ -270,6 +271,7 @@ model Client {
   tasks          Task[]
   reports        Report[]
   asset          Asset?
+  metaConnection MetaConnection?
   shoots         Shoot[]
   publishingJobs PublishingJob[]
 
@@ -656,4 +658,17 @@ model PublishingJob {
   createdAt DateTime @default(now())
 
   updatedAt DateTime @updatedAt
+}
+
+model MetaConnection {
+  id                      String   @id @default(uuid())
+  clientId                String   @unique
+  client                  Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  facebookPageId          String
+  facebookPageName        String
+  facebookPageAccessToken String
+  instagramBusinessId     String
+  instagramUsername       String?
+  connectedAt             DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 }

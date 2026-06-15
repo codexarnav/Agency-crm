@@ -106,7 +106,7 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
   const [form, setForm] = useState(getInitialForm);
   const [deliverableTab, setDeliverableTab] = useState("monthly");
   const [errors, setErrors] = useState({});
-  const [credentials, setCredentials] = useState(null);
+  const [created, setCreated] = useState(false);
 
   const set = (k, v) => {
     setForm(p => {
@@ -190,12 +190,8 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
     };
 
     if (!initial) {
-      setCredentials({
-        username: usernameVal,
-        password: "Client123!",
-        name: form.name
-      });
-      onSave({ ...finalForm, password: "Client123!" });
+      setCreated(true);
+      onSave(finalForm);
     } else {
       onSave(finalForm);
     }
@@ -208,32 +204,21 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
   const setupTypes = ["Website Setup", "Branding", "Analytics Setup", "Pixel Setup", "SEO Audit"];
   const breakdownTotal = Object.values(form.deliverableBreakdown?.monthly || {}).reduce((a, v) => a + (parseInt(v) || 0), 0);
 
-  if (credentials) {
+  if (created) {
     return (
       <Modal open={open} onClose={onClose} size="md" title="Client Created Successfully 🎉"
         footer={<div style={{ display: "flex", gap: 10 }}><Btn onClick={onClose}>Close & Refresh</Btn></div>}
       >
         <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "10px 0" }}>
-          <p style={{ fontSize: 13.5, color: "var(--muted)", lineHeight: 1.5 }}>
-            The workspace for <strong>{credentials.name}</strong> has been successfully initialized. Please share these login details with their team:
-          </p>
-          <div style={{ background: "#F3F4F6", borderRadius: 8, padding: 16, border: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-              <span style={{ fontWeight: 600, color: "var(--muted)" }}>Portal URL:</span>
-              <span style={{ fontWeight: 700, color: "var(--primary)" }}>{window.location.origin}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, background: "#DCFCE7", borderRadius: 10, border: "1px solid #BBF7D0" }}>
+            <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#16A34A", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-              <span style={{ fontWeight: 600, color: "var(--muted)" }}>Username / Email:</span>
-              <span style={{ fontWeight: 700, color: "var(--dark)" }}>{credentials.username}</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-              <span style={{ fontWeight: 600, color: "var(--muted)" }}>Temporary Password:</span>
-              <span style={{ fontWeight: 700, color: "var(--dark)", fontFamily: "monospace" }}>{credentials.password}</span>
+            <div>
+              <p style={{ fontSize: 14, fontWeight: 700, color: "#15803D", margin: 0 }}>Credentials Sent via Email</p>
+              <p style={{ fontSize: 12.5, color: "#166534", margin: "4px 0 0", lineHeight: 1.4 }}>Login credentials have been automatically emailed to the client. They will be required to change their password on first login.</p>
             </div>
           </div>
-          <p style={{ fontSize: 11.5, color: "var(--warning)", fontWeight: 600, display: "flex", gap: 4, alignItems: "center", marginTop: 4 }}>
-            ⚠️ Share these credentials securely. The client can change their password upon logging in.
-          </p>
         </div>
       </Modal>
     );
@@ -696,7 +681,6 @@ function ClientsPage() {
         companyName: form.name,
         email: form.email,
         phoneNumber: form.phone || "0000000000",
-        password: "Client123!", // default temporary password
         brandColor: `hsl(${Math.floor(Math.random() * 360)},60%,45%)`,
         brandName: form.brandName || form.name,
         industry: form.industry || "",
