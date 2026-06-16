@@ -3,6 +3,7 @@ dotenv.config();
 
 import app from "./src/app.js";
 import prisma from "./src/config/prisma.js";
+import "./src/workers/publishing.worker.js";
 
 const PORT = process.env.PORT || 5000;
 

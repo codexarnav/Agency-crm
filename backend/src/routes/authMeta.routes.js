@@ -34,7 +34,7 @@ router.get("/meta", async (req, res) => {
         const META_APP_ID = process.env.META_APP_ID || "2023348411879420";
         const META_REDIRECT_URI = process.env.META_REDIRECT_URI || "https://agency-crm-4.onrender.com/auth/meta/callback";
 
-        const oauthUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(META_REDIRECT_URI)}&scope=instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,business_management&state=${clientId}`;
+        const oauthUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(META_REDIRECT_URI)}&scope=instagram_basic,instagram_content_publish,pages_show_list,pages_read_engagement,pages_manage_posts,business_management&state=${clientId}`;
 
         return res.redirect(oauthUrl);
     } catch (error) {

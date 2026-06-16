@@ -4,6 +4,8 @@ import {
     getPublishingQueue,
     reschedulePost,
     cancelPost,
+    retryPublishingJob,
+    deletePublishingJob,
 } from "../services/api";
 import {
     SvgIcon,
@@ -36,6 +38,9 @@ export default function PublishingQueue() {
     // Cancel states
     const [cancelOpen, setCancelOpen] = useState(false);
 
+    // Delete states
+    const [deleteOpen, setDeleteOpen] = useState(false);
+
     // Fetch queue
     const fetchQueue = useCallback(async () => {
         try {
@@ -57,7 +62,22 @@ export default function PublishingQueue() {
 
     useEffect(() => {
         fetchQueue();
-    }, [fetchQueue]);
+        const interval = setInterval(() => {
+            const filters = {};
+            if (search.trim()) filters.search = search;
+            if (platform !== "all") filters.platform = platform.toUpperCase().replace("/X", "").replace(" ", "_");
+            if (status !== "all") filters.status = status;
+            if (clientId !== "all") filters.clientId = clientId;
+
+            getPublishingQueue(filters)
+                .then((res) => {
+                    setQueue(res.data || []);
+                })
+                .catch((err) => console.error("Silent auto-refresh failed:", err));
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [fetchQueue, search, platform, status, clientId]);
 
     // Handle Reschedule submit
     const handleRescheduleSubmit = async (e) => {
@@ -91,11 +111,26 @@ export default function PublishingQueue() {
         }
     };
 
+    // Handle Delete submit
+    const handleDeleteSubmit = async () => {
+        if (!selectedJob) return;
+
+        try {
+            await deletePublishingJob(selectedJob.id);
+            showToast("Publishing job deleted successfully", "success");
+            setDeleteOpen(false);
+            setSelectedJob(null);
+            fetchQueue();
+        } catch (err) {
+            showToast(err.message || "Failed to delete post", "danger");
+        }
+    };
+
     // Compute stats
     const stats = {
         total: queue.length,
-        scheduled: queue.filter(q => q.status === "SCHEDULED" || q.status === "RESCHEDULED").length,
-        posted: queue.filter(q => q.status === "POSTED").length,
+        scheduled: queue.filter(q => q.status === "SCHEDULED" || q.status === "RESCHEDULED" || q.status === "PUBLISHING").length,
+        posted: queue.filter(q => q.status === "POSTED" || q.status === "PUBLISHED").length,
         failed: queue.filter(q => q.status === "FAILED" || q.status === "FAILED_TO_POST").length,
     };
 
@@ -159,8 +194,8 @@ export default function PublishingQueue() {
                         <option value="all">All Statuses</option>
                         <option value="SCHEDULED">Scheduled</option>
                         <option value="RESCHEDULED">Rescheduled</option>
-                        <option value="POSTING">Posting</option>
-                        <option value="POSTED">Posted</option>
+                        <option value="PUBLISHING">Publishing</option>
+                        <option value="PUBLISHED">Published</option>
                         <option value="FAILED">Failed</option>
                         <option value="CANCELLED">Cancelled</option>
                     </select>
@@ -269,6 +304,33 @@ export default function PublishingQueue() {
                                                         </Btn>
                                                     </>
                                                 )}
+                                                {job.status === "FAILED" && (
+                                                    <Btn
+                                                        size="xs"
+                                                        variant="primary"
+                                                        onClick={async () => {
+                                                            try {
+                                                                await retryPublishingJob(job.id);
+                                                                showToast("Post queued for retry!", "success");
+                                                                fetchQueue();
+                                                            } catch (err) {
+                                                                showToast(err.message || "Failed to retry job", "danger");
+                                                            }
+                                                        }}
+                                                    >
+                                                        Retry
+                                                    </Btn>
+                                                )}
+                                                <Btn
+                                                    size="xs"
+                                                    variant="danger"
+                                                    onClick={() => {
+                                                        setSelectedJob(job);
+                                                        setDeleteOpen(true);
+                                                    }}
+                                                >
+                                                    Delete
+                                                </Btn>
                                             </div>
                                         </td>
                                     </tr>
@@ -341,6 +403,8 @@ export default function PublishingQueue() {
                             <div>Scheduled by: <strong>{selectedJob.manager?.username}</strong></div>
                             {selectedJob.task && <div style={{ marginTop: 4 }}>Linked Task: <strong>{selectedJob.task.title}</strong></div>}
                             {selectedJob.shoot && <div style={{ marginTop: 4 }}>Linked Shoot: <strong>{selectedJob.shoot.title}</strong></div>}
+                            {selectedJob.publishedAt && <div style={{ marginTop: 4, color: "var(--success)" }}>Published At: <strong>{new Date(selectedJob.publishedAt).toLocaleString()}</strong></div>}
+                            {selectedJob.attempts > 0 && <div style={{ marginTop: 4 }}>Attempts: <strong>{selectedJob.attempts}</strong></div>}
                             {selectedJob.failureReason && <div style={{ marginTop: 4, color: "var(--danger)" }}>Failure Reason: <strong>{selectedJob.failureReason}</strong></div>}
                         </div>
 
@@ -428,6 +492,39 @@ export default function PublishingQueue() {
                         </Btn>
                         <Btn variant="danger" onClick={handleCancelSubmit}>
                             Yes, Cancel Post
+                        </Btn>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Delete Confirm Modal */}
+            <Modal
+                open={deleteOpen}
+                onClose={() => {
+                    setDeleteOpen(false);
+                    setSelectedJob(null);
+                }}
+                title="Delete Publishing Job"
+                size="sm"
+            >
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    <p style={{ fontSize: 13.5, lineHeight: 1.5 }}>
+                        Are you sure you want to delete this publishing job? 
+                        {selectedJob?.status === "PUBLISHED" && selectedJob?.platform.toUpperCase() === "FACEBOOK" && (
+                            <span> This will also attempt to delete the published post from Facebook.</span>
+                        )}
+                        This action cannot be undone.
+                    </p>
+
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
+                        <Btn variant="outline" onClick={() => {
+                            setDeleteOpen(false);
+                            setSelectedJob(null);
+                        }}>
+                            Cancel
+                        </Btn>
+                        <Btn variant="danger" onClick={handleDeleteSubmit}>
+                            Yes, Delete Job
                         </Btn>
                     </div>
                 </div>

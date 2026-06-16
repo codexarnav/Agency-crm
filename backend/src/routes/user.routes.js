@@ -8,7 +8,7 @@ const router = express.Router();
 router.post("/create-manager", verifyToken, authorizeRoles("SUPER_ADMIN"), createManagerUser);
 router.post("/create-employee", verifyToken, authorizeRoles("SUPER_ADMIN", "MANAGER"), createEmployeeUser);
 
-router.get("/managers", verifyToken, authorizeRoles("SUPER_ADMIN"), getManagers);
+router.get("/managers", verifyToken, authorizeRoles("SUPER_ADMIN", "MANAGER", "EMPLOYEE"), getManagers);
 router.get("/employees", verifyToken, authorizeRoles("SUPER_ADMIN", "MANAGER"), getEmployees);
 router.get("/managers/performance", verifyToken, authorizeRoles("SUPER_ADMIN"), getManagersPerformance);
 

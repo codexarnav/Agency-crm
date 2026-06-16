@@ -93,6 +93,12 @@ export async function getEmployees() {
   return request("GET", "/users/employees");
 }
 
+export async function uploadFile(file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return request("POST", "/upload", formData);
+}
+
 // ── Client Management API ──────────────────────────────────
 export async function createClient(payload) {
   return request("POST", "/clients/create", payload);
@@ -384,6 +390,18 @@ export async function cancelPost(id) {
 
 export async function getPublishingJobById(id) {
   return request("GET", `/publishing/${id}`);
+}
+
+export async function retryPublishingJob(id) {
+  return request("POST", `/publishing/${id}/retry`);
+}
+
+export async function deletePublishingJob(id) {
+  return request("DELETE", `/publishing/${id}`);
+}
+
+export async function getClientSocialConnection(clientId) {
+  return request("GET", `/publishing/social-status/${clientId}`);
 }
 
 // ── Settings Module API ──────────────────────────────────────

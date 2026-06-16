@@ -37,15 +37,21 @@ export default function PublishingCalendar() {
         "July", "August", "September", "October", "November", "December"
     ];
 
-    const platformColor = (platform) => {
-        const plat = platform?.toUpperCase() || "";
-        if (plat.includes("INSTAGRAM")) return { bg: "#FFF5F0", fg: "#FF6A00", border: "#FFC2A0" };
-        if (plat.includes("FACEBOOK")) return { bg: "#EEF4FC", fg: "#1877F2", border: "#ADCFF9" };
-        if (plat.includes("YOUTUBE")) return { bg: "#FFF0F0", fg: "#FF0000", border: "#FFA3A3" };
-        if (plat.includes("LINKEDIN")) return { bg: "#EBF3FA", fg: "#0A66C2", border: "#9CC4EB" };
-        if (plat.includes("TWITTER") || plat.includes("X")) return { bg: "#EAEAEA", fg: "#14171A", border: "#A0A0A0" };
-        if (plat.includes("PINTEREST")) return { bg: "#FDF0F2", fg: "#E60023", border: "#F6A3B0" };
-        return { bg: "#EBFBFA", fg: "#008080", border: "#9CEBEB" };
+    const statusColor = (status) => {
+        const stat = status?.toUpperCase() || "";
+        if (stat === "SCHEDULED" || stat === "RESCHEDULED") {
+            return { bg: "#EEF4FC", fg: "#1877F2", border: "#ADCFF9" }; // Blue
+        }
+        if (stat === "PUBLISHING") {
+            return { bg: "#FFF5F0", fg: "#FF6A00", border: "#FFC2A0" }; // Orange
+        }
+        if (stat === "PUBLISHED" || stat === "POSTED") {
+            return { bg: "#ECFDF5", fg: "#059669", border: "#A7F3D0" }; // Green
+        }
+        if (stat === "FAILED" || stat === "FAILED_TO_POST") {
+            return { bg: "#FEF2F2", fg: "#DC2626", border: "#FCA5A5" }; // Red
+        }
+        return { bg: "#F3F4F6", fg: "#4B5563", border: "#D1D5DB" }; // Cancelled/Draft (Gray)
     };
 
     // Calculate dates range
@@ -66,7 +72,18 @@ export default function PublishingCalendar() {
 
     useEffect(() => {
         fetchJobs();
-    }, [fetchJobs]);
+        const interval = setInterval(() => {
+            const start = new Date(pivotDate.getFullYear(), pivotDate.getMonth() - 1, 1);
+            const end = new Date(pivotDate.getFullYear(), pivotDate.getMonth() + 2, 0);
+            getPublishingCalendar(start.toISOString(), end.toISOString())
+                .then((res) => {
+                    setJobs(res.data || []);
+                })
+                .catch((err) => console.error("Silent calendar auto-refresh failed:", err));
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [fetchJobs, pivotDate]);
 
     // Local filters
     const filteredJobs = jobs.filter(job => {
@@ -349,7 +366,7 @@ export default function PublishingCalendar() {
                                     {/* Jobs render */}
                                     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                                         {dayJobs.map(job => {
-                                            const colors = platformColor(job.platform);
+                                            const colors = statusColor(job.status);
                                             const title = job.task ? job.task.title : (job.shoot ? job.shoot.title : "Direct Schedule");
                                             return (
                                                 <div
@@ -392,15 +409,15 @@ export default function PublishingCalendar() {
                     {/* Legend */}
                     <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border)", display: "flex", gap: 14, flexWrap: "wrap", background: "#FAFBFB" }}>
                         {[
-                            ["Instagram", "#FFF5F0", "#FF6A00", "#FFC2A0"],
-                            ["Facebook", "#EEF4FC", "#1877F2", "#ADCFF9"],
-                            ["YouTube", "#FFF0F0", "#FF0000", "#FFA3A3"],
-                            ["LinkedIn", "#EBF3FA", "#0A66C2", "#9CC4EB"],
-                            ["Pinterest", "#FDF0F2", "#E60023", "#F6A3B0"],
-                        ].map(([plat, bg, fg, border]) => (
-                            <div key={plat} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "var(--muted)" }}>
+                            ["Scheduled", "#EEF4FC", "#1877F2", "#ADCFF9"],
+                            ["Publishing", "#FFF5F0", "#FF6A00", "#FFC2A0"],
+                            ["Published", "#ECFDF5", "#059669", "#A7F3D0"],
+                            ["Failed", "#FEF2F2", "#DC2626", "#FCA5A5"],
+                            ["Cancelled", "#F3F4F6", "#4B5563", "#D1D5DB"],
+                        ].map(([statusLabel, bg, fg, border]) => (
+                            <div key={statusLabel} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11.5, color: "var(--muted)" }}>
                                 <div style={{ width: 12, height: 10, borderRadius: 3, background: bg, border: `1.5px solid ${border}` }} />
-                                {plat}
+                                {statusLabel}
                             </div>
                         ))}
                     </div>

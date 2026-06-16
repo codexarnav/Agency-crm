@@ -1,5 +1,6 @@
 import prisma from "../config/prisma.js";
 import { createNotification } from "./notifications.service.js";
+import { addPublishingJob } from "../config/publishingQueue.js";
 
 // Helper to notify the assigned employee or creative lead
 const notifyAssignee = async (job, type, content, senderId) => {
@@ -28,14 +29,14 @@ const notifyAssignee = async (job, type, content, senderId) => {
  * Schedule a new publishing job
  */
 export const schedulePost = async (data, loggedInUser) => {
-    const { taskId, shootId, platform, caption, mediaUrls, scheduledAt } = data;
+    const { taskId, shootId, platform, platforms, caption, mediaUrls, scheduledAt } = data;
 
     if (!taskId && !shootId) {
         throw new Error("Either taskId or shootId must be provided to schedule a post");
     }
 
-    if (!platform) {
-        throw new Error("Platform is required");
+    if (!platform && (!platforms || platforms.length === 0)) {
+        throw new Error("Platform(s) selection is required");
     }
 
     if (!scheduledAt) {
@@ -83,27 +84,67 @@ export const schedulePost = async (data, loggedInUser) => {
         throw new Error("Client ID could not be determined");
     }
 
-    // Create the publishing job
-    const job = await prisma.publishingJob.create({
-        data: {
-            companyId,
-            clientId,
-            managerId: loggedInUser.id,
-            taskId: taskId || null,
-            shootId: shootId || null,
-            platform,
-            caption: caption || null,
-            mediaUrls: Array.isArray(mediaUrls) ? mediaUrls.join(",") : (mediaUrls || ""),
-            scheduledAt: new Date(scheduledAt),
-            status: "SCHEDULED",
-        },
-        include: {
-            task: true,
-            shoot: true,
-            client: true,
-            manager: true,
-        },
+    // 1. Social connection validation before scheduling
+    const metaConn = await prisma.metaConnection.findUnique({
+        where: { clientId },
     });
+
+    if (!metaConn) {
+        throw new Error("This client has not connected any social media profiles. Please connect Meta accounts first.");
+    }
+
+    const targetPlatforms = Array.isArray(platforms) ? platforms : (platform ? [platform] : []);
+    if (targetPlatforms.length === 0) {
+        throw new Error("At least one platform must be selected");
+    }
+
+    for (const p of targetPlatforms) {
+        const upperPlatform = p.toUpperCase();
+        if (upperPlatform === "FACEBOOK") {
+            if (!metaConn.facebookPageId || !metaConn.facebookPageAccessToken) {
+                throw new Error("Client Facebook page is not connected or unauthorized");
+            }
+        } else if (upperPlatform === "INSTAGRAM") {
+            if (!metaConn.instagramBusinessId) {
+                throw new Error("Client Instagram Business profile is not connected");
+            }
+        } else {
+            throw new Error(`Unsupported platform: ${p}`);
+        }
+    }
+
+    const createdJobs = [];
+    const scheduleDateObj = new Date(scheduledAt);
+    const delayMs = scheduleDateObj.getTime() - Date.now();
+
+    // Create a publishing job for each selected platform
+    for (const p of targetPlatforms) {
+        const job = await prisma.publishingJob.create({
+            data: {
+                companyId,
+                clientId,
+                managerId: loggedInUser.id,
+                taskId: taskId || null,
+                shootId: shootId || null,
+                platform: p.toUpperCase(),
+                caption: caption || null,
+                mediaUrls: Array.isArray(mediaUrls) ? mediaUrls.join(",") : (mediaUrls || ""),
+                scheduledAt: scheduleDateObj,
+                status: "SCHEDULED",
+                platforms: targetPlatforms.map(pt => pt.toUpperCase()),
+            },
+            include: {
+                task: true,
+                shoot: true,
+                client: true,
+                manager: true,
+            },
+        });
+
+        // Add to BullMQ Queue
+        await addPublishingJob(job.id, delayMs);
+        createdJobs.push(job);
+    }
 
     // Sync task publishing status if task is linked
     if (taskId) {
@@ -111,21 +152,26 @@ export const schedulePost = async (data, loggedInUser) => {
             where: { id: taskId },
             data: {
                 publishingStatus: "SCHEDULED",
-                scheduleDateTime: new Date(scheduledAt),
+                scheduleDateTime: scheduleDateObj,
+                selectedPlatforms: targetPlatforms.map(pt => pt.toUpperCase()),
+                publishError: null,
             },
         });
     }
 
-    // Notify assignee
-    const itemTitle = task ? task.title : (shoot ? shoot.title : "Content");
-    await notifyAssignee(
-        job,
-        "PUBLISHING_SCHEDULED",
-        `Post "${itemTitle}" has been scheduled for publishing on ${platform} at ${new Date(scheduledAt).toLocaleString()}`,
-        loggedInUser.id
-    );
+    // Notify assignee (using the first job created as reference)
+    if (createdJobs.length > 0) {
+        const itemTitle = task ? task.title : (shoot ? shoot.title : "Content");
+        await notifyAssignee(
+            createdJobs[0],
+            "PUBLISHING_SCHEDULED",
+            `Post "${itemTitle}" has been scheduled for publishing on ${targetPlatforms.join(", ")} at ${scheduleDateObj.toLocaleString()}`,
+            loggedInUser.id
+        );
+    }
 
-    return job;
+    // Return the first job or all of them depending on API expectation
+    return createdJobs[0];
 };
 
 /**
@@ -358,3 +404,148 @@ export const getPublishingJobById = async (id, companyId, loggedInUser = null) =
 
     return job;
 };
+
+/**
+ * Retry a failed publishing job
+ */
+export const retryPublishingJob = async (id, companyId, loggedInUser) => {
+    const job = await prisma.publishingJob.findFirst({
+        where: { id, companyId },
+        include: {
+            task: true,
+            shoot: true,
+        },
+    });
+
+    if (!job) {
+        throw new Error("Publishing job not found");
+    }
+
+    if (loggedInUser && loggedInUser.role === "MANAGER" && job.managerId !== loggedInUser.id) {
+        throw new Error("Access denied: You do not own this publishing job");
+    }
+
+    const updatedJob = await prisma.publishingJob.update({
+        where: { id },
+        data: {
+            status: "SCHEDULED",
+            attempts: 0,
+            lastError: null,
+            failureReason: null,
+        },
+        include: {
+            client: true,
+            task: true,
+            shoot: true,
+            manager: true,
+        },
+    });
+
+    if (job.taskId) {
+        await prisma.task.update({
+            where: { id: job.taskId },
+            data: {
+                publishingStatus: "SCHEDULED",
+                publishError: null,
+            },
+        });
+    }
+
+    // Trigger immediately
+    await addPublishingJob(updatedJob.id, 0);
+
+    return updatedJob;
+};
+
+/**
+ * Get client's social connection status
+ */
+export const getSocialStatus = async (clientId, companyId) => {
+    const client = await prisma.client.findFirst({
+        where: { id: clientId, companyId },
+    });
+
+    if (!client) {
+        throw new Error("Client not found");
+    }
+
+    const metaConn = await prisma.metaConnection.findUnique({
+        where: { clientId },
+    });
+
+    return {
+        clientName: client.companyName || client.brandName || "Client",
+        connected: !!metaConn,
+        facebookConnected: !!(metaConn && metaConn.facebookPageId && metaConn.facebookPageAccessToken),
+        instagramConnected: !!(metaConn && metaConn.instagramBusinessId),
+        facebookPageName: metaConn ? metaConn.facebookPageName : null,
+        instagramUsername: metaConn ? metaConn.instagramUsername : null,
+    };
+};
+
+/**
+ * Delete a publishing job (and delete from Facebook if already published)
+ */
+export const deletePublishingJob = async (id, companyId, loggedInUser) => {
+    const job = await prisma.publishingJob.findFirst({
+        where: { id, companyId },
+        include: {
+            task: true,
+            shoot: true,
+            client: {
+                include: {
+                    metaConnection: true,
+                },
+            },
+        },
+    });
+
+    if (!job) {
+        throw new Error("Publishing job not found");
+    }
+
+    if (loggedInUser && loggedInUser.role === "MANAGER" && job.managerId !== loggedInUser.id) {
+        throw new Error("Access denied: You do not own this publishing job");
+    }
+
+    // If already published and on FACEBOOK, try to delete it from Meta
+    if (job.status === "PUBLISHED" && job.platform.toUpperCase() === "FACEBOOK" && job.externalPostId) {
+        try {
+            const metaConn = job.client.metaConnection;
+            if (metaConn && metaConn.facebookPageAccessToken) {
+                console.log(`Attempting to delete Facebook post ${job.externalPostId} via Graph API`);
+                const deleteUrl = `https://graph.facebook.com/v19.0/${job.externalPostId}?access_token=${metaConn.facebookPageAccessToken}`;
+                const res = await fetch(deleteUrl, { method: "DELETE" });
+                const resData = await res.json();
+                if (!res.ok) {
+                    console.error("Facebook delete failed:", resData);
+                } else {
+                    console.log(`Successfully deleted Facebook post ${job.externalPostId}`);
+                }
+            }
+        } catch (err) {
+            console.error("Error attempting to delete Facebook post:", err);
+        }
+    }
+
+    // Delete the job from database
+    const deletedJob = await prisma.publishingJob.delete({
+        where: { id },
+    });
+
+    // Update task status if linked
+    if (job.taskId) {
+        await prisma.task.update({
+            where: { id: job.taskId },
+            data: {
+                publishingStatus: "NOT_SCHEDULED",
+                publishedAt: null,
+                publishError: null,
+            },
+        });
+    }
+
+    return deletedJob;
+};
+
+

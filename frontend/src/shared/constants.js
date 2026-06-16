@@ -217,6 +217,7 @@ export const NAV_CONFIG = {
     {
       label: "Publishing", items: [
         { id: "publishing_queue", label: "Publishing Queue", iconName: "checklist" },
+        { id: "publishing_calendar", label: "Publishing Calendar", iconName: "calendar" },
       ]
     },
     {
@@ -258,6 +259,7 @@ export const NAV_CONFIG = {
     {
       label: "Publishing", items: [
         { id: "publishing_queue", label: "Publishing Queue", iconName: "checklist" },
+        { id: "publishing_calendar", label: "Publishing Calendar", iconName: "calendar" },
       ]
     },
     {

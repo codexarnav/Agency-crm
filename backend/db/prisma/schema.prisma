@@ -68,6 +68,8 @@ enum PublishingStatus {
   NOT_SCHEDULED
   FAILED_TO_POST
   RESCHEDULED
+  PUBLISHING
+  PUBLISHED
 }
 
 enum Priority {
@@ -113,6 +115,8 @@ enum NotificationType {
   PUBLISHING_SCHEDULED
   PUBLISHING_RESCHEDULED
   PUBLISHING_CANCELLED
+  POST_PUBLISHED
+  POST_PUBLISH_FAILED
 }
 
 enum ReportStatus {
@@ -314,6 +318,11 @@ model Task {
   dueDate DateTime?
 
   scheduleDateTime DateTime?
+  publishedAt          DateTime?
+  publishError         String?
+  publishingAttempts   Int        @default(0)
+  metaPostIds          Json?
+  selectedPlatforms    String[]   @default([])
 
   approvalComment   String?
   approvalUpdatedAt DateTime?
@@ -654,6 +663,11 @@ model PublishingJob {
   failureReason String?
 
   externalPostId String?
+
+  attempts     Int      @default(0)
+  lastError    String?
+  processedAt  DateTime?
+  platforms    String[] @default([])
 
   createdAt DateTime @default(now())
 

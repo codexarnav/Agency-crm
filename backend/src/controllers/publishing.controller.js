@@ -5,6 +5,9 @@ import {
     reschedulePost,
     cancelPost,
     getPublishingJobById,
+    retryPublishingJob,
+    getSocialStatus,
+    deletePublishingJob,
 } from "../services/publishing.service.js";
 
 /**
@@ -128,3 +131,62 @@ export const getPublishingJobByIdController = async (req, res) => {
         });
     }
 };
+
+/**
+ * Retry a failed publishing job
+ */
+export const retryPublishingJobController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const job = await retryPublishingJob(id, req.user.companyId, req.user);
+        return res.status(200).json({
+            success: true,
+            data: job,
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
+
+/**
+ * Get client's social connection status
+ */
+export const getSocialStatusController = async (req, res) => {
+    try {
+        const { clientId } = req.params;
+        const status = await getSocialStatus(clientId, req.user.companyId);
+        return res.status(200).json({
+            success: true,
+            data: status,
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
+
+/**
+ * Delete a publishing job
+ */
+export const deletePublishingJobController = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const job = await deletePublishingJob(id, req.user.companyId, req.user);
+        return res.status(200).json({
+            success: true,
+            message: "Publishing job deleted successfully",
+            data: job,
+        });
+    } catch (error) {
+        return res.status(400).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
+

@@ -38,6 +38,7 @@ import EmployeesPage from "../pages/Employees";
 import ComingSoonPage from "../pages/ComingSoonPage";
 import ShootsPage from "../pages/ShootsPage";
 import PublishingQueue from "../pages/PublishingQueue";
+import PublishingCalendar from "../pages/PublishingCalendar";
 import SettingsPage from "../pages/SettingsPage";
 import ClientSocialOnboardingPage from "../pages/ClientSocialOnboardingPage";
 
@@ -262,6 +263,9 @@ function AppShell({ session, logout, updateSession }) {
       case "publishing_queue":
         if (role !== "superadmin" && role !== "manager") { setPage("dashboard"); return null; }
         return <PublishingQueue />;
+      case "publishing_calendar":
+        if (role !== "superadmin" && role !== "manager") { setPage("dashboard"); return null; }
+        return <PublishingCalendar />;
       case "shoots": return <ShootsPage />;
       case "settings_social": return <ClientSocialOnboardingPage />;
       case "settings": return <SettingsPage />;

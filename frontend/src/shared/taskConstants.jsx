@@ -4,7 +4,7 @@ import { LSUtils } from "./utils";
 import { LS_KEYS } from "./constants";
 import { useApp } from "./AppContext";
 import { useState, useEffect } from "react";
-import { updateTask, createTask, getRevisions, createRevision } from "../services/api";
+import { updateTask, createTask, getRevisions, createRevision, updateTaskStatus, getManagers, uploadFile } from "../services/api";
 import ScheduleModal from "../components/publishing/ScheduleModal";
 
 
@@ -664,13 +664,48 @@ function TaskDetailDrawer({ task, open, onClose, employees, onStatusUpdate }) {
   const [contentLink, setContentLink] = useState(task.contentLink || "");
   const [note, setNote] = useState("");
   const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  const [allManagers, setAllManagers] = useState([]);
+  const [selectedManagerId, setSelectedManagerId] = useState(task.managerId || "");
+  const [sourceType, setSourceType] = useState("drive");
+  const [isUploading, setIsUploading] = useState(false);
 
-  const update = async (changes) => {
+  useEffect(() => {
+    if (task) {
+      setContentLink(task.contentLink || "");
+      setSelectedManagerId(task.managerId || "");
+      if (task.contentLink) {
+        if (task.contentLink.includes("cloudinary.com") || task.contentLink.includes("/uploads/")) {
+          setSourceType("upload");
+        } else if (task.contentLink.includes("instagram.com") || task.contentLink.includes("facebook.com") || task.contentLink.includes("youtube.com") || task.contentLink.includes("linkedin.com") || task.contentLink.includes("twitter.com") || task.contentLink.includes("x.com")) {
+          setSourceType("post");
+        } else {
+          setSourceType("drive");
+        }
+      } else {
+        setSourceType("drive");
+      }
+    }
+  }, [task]);
+
+  useEffect(() => {
+    if (open && session?.role !== "client") {
+      getManagers().then(res => {
+        setAllManagers(res.data || []);
+      }).catch(err => console.error("Failed to load managers:", err));
+    }
+  }, [open, session?.role]);
+
+  const update = async (changes, customMessage) => {
     try {
-      const res = await updateTask(task.id, changes);
+      let res;
+      if (session?.role === "employee") {
+        res = await updateTaskStatus(task.id, changes);
+      } else {
+        res = await updateTask(task.id, changes);
+      }
       await refreshTasks();
       if (onStatusUpdate) onStatusUpdate(res.data || { ...task, ...changes });
-      showToast("Task updated.", "success");
+      showToast(customMessage || "Task updated.", "success");
     } catch (err) {
       showToast(err.message || "Failed to update task.", "error");
     }
@@ -696,12 +731,49 @@ function TaskDetailDrawer({ task, open, onClose, employees, onStatusUpdate }) {
             </div>
           </div>
           {/* Fields */}
-          {[["Client", task.clientName], ["Posting Date", task.postingDate], ["Deadline", task.internalDeadline], ["Assigned To", emp?.name || task.assignedTo || " - "]].map(([l, v]) => (
-            <div key={l} style={{ display: "flex", gap: 12, padding: "6px 0", borderBottom: "1px solid #F9FAFB" }}>
-              <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600, minWidth: 110 }}>{l}</span>
-              <span style={{ fontSize: 13, fontWeight: 500 }}>{v || " - "}</span>
-            </div>
-          ))}
+          {(() => {
+            const mgrUser = allManagers.find(m => m.id === (selectedManagerId || task.managerId));
+            const fields = [
+              ["Client", task.clientName],
+              ["Posting Date", task.postingDate],
+              ["Deadline", task.internalDeadline],
+              ["Assigned To", emp?.name || task.assignedTo || " - "]
+            ];
+
+            if (session?.role !== "client" && mgrUser) {
+              fields.push(["Reviewing Manager", mgrUser.name || mgrUser.username || " - "]);
+            }
+
+            if (task.contentLink) {
+              let linkLabel = "Content Link";
+              if (task.contentLink.includes("drive.google.com") || task.contentLink.includes("dropbox.com") || task.contentLink.includes("box.com") || task.contentLink.includes("sharepoint") || task.contentLink.includes("onedrive")) {
+                linkLabel = "Drive Link";
+              } else if (task.contentLink.includes("instagram.com") || task.contentLink.includes("facebook.com") || task.contentLink.includes("youtube.com") || task.contentLink.includes("linkedin.com") || task.contentLink.includes("twitter.com") || task.contentLink.includes("x.com")) {
+                linkLabel = "Post Link";
+              } else if (task.contentLink.includes("cloudinary.com") || task.contentLink.includes("/uploads/")) {
+                linkLabel = "Uploaded File";
+              }
+
+              fields.push([
+                "Content Link",
+                <a 
+                  href={task.contentLink} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  style={{ color: "var(--primary)", fontWeight: 600, textDecoration: "underline" }}
+                >
+                  {linkLabel}
+                </a>
+              ]);
+            }
+
+            return fields.map(([l, v]) => (
+              <div key={l} style={{ display: "flex", gap: 12, padding: "6px 0", borderBottom: "1px solid #F9FAFB", alignItems: "center" }}>
+                <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600, minWidth: 110 }}>{l}</span>
+                <span style={{ fontSize: 13, fontWeight: 500 }}>{v || " - "}</span>
+              </div>
+            ));
+          })()}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "12px 0" }}>
             <ProdMBadge s={task.productionStatus} />
             <ApprovMBadge s={task.approvalStatus} />
@@ -724,12 +796,145 @@ function TaskDetailDrawer({ task, open, onClose, employees, onStatusUpdate }) {
               ))}
             </div>
           </div>
-          {/* Content link */}
+          
+          {/* Manager Assignment (only for employee role) */}
+          {session?.role === "employee" && (
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 5, display: "block" }}>Assign Manager for Review *</label>
+              <select 
+                value={selectedManagerId} 
+                onChange={e => setSelectedManagerId(e.target.value)} 
+                className="form-input"
+                style={{ width: "100%", fontSize: 13 }}
+              >
+                <option value="">-- Select Manager --</option>
+                {allManagers.map(mgr => (
+                  <option key={mgr.id} value={mgr.id}>{mgr.name || mgr.username}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          
+          {/* Content Submission */}
           <div style={{ marginBottom: 14 }}>
-            <label style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 5, display: "block" }}>Content Link</label>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input value={contentLink} onChange={e => setContentLink(e.target.value)} placeholder="Drive / Dropbox URL" className="form-input" style={{ flex: 1 }} />
-              <Btn size="sm" onClick={() => { update({ contentLink, productionStatus: "ready_for_review" }); showToast("Link submitted, status set to Ready for Review.", "success"); }}>Submit</Btn>
+            <label style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 5, display: "block" }}>Content Submission</label>
+            
+            {/* Source Type Selector */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+              {[
+                ["drive", "Drive Link"],
+                ["post", "Post Link"],
+                ["upload", "Upload File"]
+              ].map(([id, lbl]) => (
+                <button 
+                  key={id} 
+                  type="button"
+                  onClick={() => {
+                    setSourceType(id);
+                    if (id === "upload") setContentLink("");
+                  }}
+                  style={{ 
+                    flex: 1, 
+                    padding: "4px 8px", 
+                    borderRadius: 6, 
+                    fontSize: 11, 
+                    fontWeight: 600, 
+                    cursor: "pointer", 
+                    border: "1.5px solid",
+                    borderColor: sourceType === id ? "var(--primary)" : "var(--border)",
+                    background: sourceType === id ? "var(--light-orange)" : "#fff",
+                    color: sourceType === id ? "var(--primary)" : "var(--muted)",
+                    transition: "all 0.12s"
+                  }}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
+
+            {/* Conditional Input based on Source Type */}
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {sourceType === "upload" ? (
+                <div style={{ flex: 1, position: "relative" }}>
+                  <input 
+                    type="file" 
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setIsUploading(true);
+                      try {
+                        const res = await uploadFile(file);
+                        if (res.success && res.url) {
+                          setContentLink(res.url);
+                          showToast("File uploaded successfully!", "success");
+                        } else {
+                          showToast("Upload failed.", "error");
+                        }
+                      } catch (err) {
+                        showToast(err.message || "Failed to upload file.", "error");
+                      } finally {
+                        setIsUploading(false);
+                      }
+                    }}
+                    style={{ display: "none" }}
+                    id="drawer-file-upload"
+                    disabled={isUploading}
+                  />
+                  <label 
+                    htmlFor="drawer-file-upload"
+                    style={{ 
+                      display: "flex", 
+                      alignItems: "center", 
+                      justifyContent: "center", 
+                      gap: 8,
+                      padding: "8px 12px", 
+                      borderRadius: 7, 
+                      border: "1.5px dashed var(--border)", 
+                      background: "#F9FAFB", 
+                      cursor: isUploading ? "not-allowed" : "pointer",
+                      fontSize: 12.5,
+                      fontWeight: 500,
+                      color: "var(--muted)",
+                      width: "100%",
+                      textAlign: "center"
+                    }}
+                  >
+                    {isUploading ? (
+                      <>Uploading...</>
+                    ) : contentLink ? (
+                      <span style={{ color: "var(--primary)", fontWeight: 600 }}>v File Uploaded</span>
+                    ) : (
+                      <>Choose file to upload</>
+                    )}
+                  </label>
+                </div>
+              ) : (
+                <input 
+                  value={contentLink} 
+                  onChange={e => setContentLink(e.target.value)} 
+                  placeholder={sourceType === "post" ? "Instagram/Facebook Post URL" : "Google Drive / Dropbox URL"} 
+                  className="form-input" 
+                  style={{ flex: 1 }} 
+                />
+              )}
+              
+              <Btn 
+                size="sm" 
+                disabled={isUploading || !contentLink}
+                onClick={() => { 
+                  if (session?.role === "employee" && !selectedManagerId) {
+                    showToast("Please assign a manager for review.", "warning");
+                    return;
+                  }
+                  const payload = { contentLink, productionStatus: "ready_for_review" };
+                  if (selectedManagerId) {
+                    payload.managerId = selectedManagerId;
+                  }
+                  update(payload, "Link submitted, status set to Ready for Review."); 
+                }}
+              >
+                Submit
+              </Btn>
             </div>
           </div>
           {/* Note */}

@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { useApp } from "../../shared/AppContext";
 import { Btn } from "../../shared/components";
-import { schedulePost } from "../../services/api";
+import { schedulePost, getClientSocialConnection } from "../../services/api";
 
 export default function ScheduleModal({ open, onClose, task, shoot, onSuccess }) {
     const { showToast } = useApp();
+    const [connectionStatus, setConnectionStatus] = useState(null);
+    const [checkingConnection, setCheckingConnection] = useState(false);
+    const [selectedPlatforms, setSelectedPlatforms] = useState([]);
     const [loading, setLoading] = useState(false);
-    const [platform, setPlatform] = useState("Instagram");
     const [caption, setCaption] = useState("");
     const [mediaUrls, setMediaUrls] = useState("");
     const [date, setDate] = useState("");
@@ -14,11 +16,9 @@ export default function ScheduleModal({ open, onClose, task, shoot, onSuccess })
 
     useEffect(() => {
         if (task) {
-            setPlatform(task.platform || "Instagram");
             setCaption(task.captionCopy || "");
             setMediaUrls(task.contentLink || "");
         } else if (shoot) {
-            setPlatform("Instagram");
             setCaption(shoot.title || "");
             setMediaUrls(shoot.shootDraftUrl || "");
         }
@@ -28,12 +28,40 @@ export default function ScheduleModal({ open, onClose, task, shoot, onSuccess })
         tomorrow.setDate(tomorrow.getDate() + 1);
         setDate(tomorrow.toISOString().split("T")[0]);
         setTime("12:00");
+
+        // Fetch connection status of the client
+        const clientId = task?.clientId || shoot?.clientId;
+        if (clientId && open) {
+            setCheckingConnection(true);
+            getClientSocialConnection(clientId)
+                .then((res) => {
+                    if (res.success && res.data) {
+                        setConnectionStatus(res.data);
+                        // Auto-select connected platforms
+                        const initial = [];
+                        if (res.data.instagramConnected) initial.push("INSTAGRAM");
+                        if (res.data.facebookConnected) initial.push("FACEBOOK");
+                        setSelectedPlatforms(initial);
+                    }
+                })
+                .catch((err) => {
+                    console.error("Failed to load client connection status:", err);
+                    showToast("Failed to verify social accounts connection", "error");
+                })
+                .finally(() => {
+                    setCheckingConnection(false);
+                });
+        }
     }, [task, shoot, open]);
 
     if (!open) return null;
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (selectedPlatforms.length === 0) {
+            showToast("Please select at least one platform to publish", "error");
+            return;
+        }
         if (!date || !time) {
             showToast("Please select both date and time", "error");
             return;
@@ -43,7 +71,7 @@ export default function ScheduleModal({ open, onClose, task, shoot, onSuccess })
         try {
             const scheduledAt = new Date(`${date}T${time}:00`);
             const payload = {
-                platform: platform.toUpperCase().replace("/X", "").replace(" ", "_"), // Normalize platform name for DB
+                platforms: selectedPlatforms,
                 caption,
                 mediaUrls,
                 scheduledAt: scheduledAt.toISOString(),
@@ -67,7 +95,7 @@ export default function ScheduleModal({ open, onClose, task, shoot, onSuccess })
     };
 
     return (
-        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 999 }}>
+        <div style={{ position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 999 }} onClick={e => e.stopPropagation()}>
             <div style={{ background: "var(--card)", padding: 24, borderRadius: 12, width: "100%", maxWidth: 460, boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
                     <h3 style={{ fontSize: 16, fontWeight: 700 }}>Schedule for Publishing</h3>
@@ -76,22 +104,50 @@ export default function ScheduleModal({ open, onClose, task, shoot, onSuccess })
 
                 <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                     <div>
-                        <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 6 }}>Social Media Platform</label>
-                        <select 
-                            value={platform} 
-                            onChange={(e) => setPlatform(e.target.value)} 
-                            className="form-input" 
-                            style={{ width: "100%" }}
-                            required
-                        >
-                            <option value="Instagram">Instagram</option>
-                            <option value="Facebook">Facebook</option>
-                            <option value="YouTube">YouTube</option>
-                            <option value="LinkedIn">LinkedIn</option>
-                            <option value="Twitter/X">Twitter/X</option>
-                            <option value="Pinterest">Pinterest</option>
-                            <option value="Google Business Profile">Google Business Profile</option>
-                        </select>
+                        <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 6 }}>Social Media Platform(s)</label>
+                        {checkingConnection ? (
+                            <div style={{ fontSize: 12, color: "var(--muted)", padding: "4px 0" }}>Checking client connections...</div>
+                        ) : connectionStatus ? (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "4px 0" }}>
+                                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: connectionStatus.instagramConnected ? "pointer" : "not-allowed", opacity: connectionStatus.instagramConnected ? 1 : 0.6 }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedPlatforms.includes("INSTAGRAM")}
+                                        disabled={!connectionStatus.instagramConnected}
+                                        onChange={(e) => {
+                                            if (e.target.checked) {
+                                                setSelectedPlatforms([...selectedPlatforms, "INSTAGRAM"]);
+                                            } else {
+                                                setSelectedPlatforms(selectedPlatforms.filter(p => p !== "INSTAGRAM"));
+                                            }
+                                        }}
+                                    />
+                                    <span>Instagram {connectionStatus.instagramConnected ? `(${connectionStatus.instagramUsername || "Connected"})` : "(Not Connected)"}</span>
+                                </label>
+                                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: connectionStatus.facebookConnected ? "pointer" : "not-allowed", opacity: connectionStatus.facebookConnected ? 1 : 0.6 }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedPlatforms.includes("FACEBOOK")}
+                                        disabled={!connectionStatus.facebookConnected}
+                                        onChange={(e) => {
+                                            if (e.target.checked) {
+                                                setSelectedPlatforms([...selectedPlatforms, "FACEBOOK"]);
+                                            } else {
+                                                setSelectedPlatforms(selectedPlatforms.filter(p => p !== "FACEBOOK"));
+                                            }
+                                        }}
+                                    />
+                                    <span>Facebook {connectionStatus.facebookConnected ? `(${connectionStatus.facebookPageName || "Connected"})` : "(Not Connected)"}</span>
+                                </label>
+                                {!connectionStatus.instagramConnected && !connectionStatus.facebookConnected && (
+                                    <div style={{ fontSize: 12, color: "var(--danger)", marginTop: 4 }}>
+                                        ⚠️ Client has no connected social accounts. Please link them under Client Settings.
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div style={{ fontSize: 12, color: "var(--danger)" }}>Could not verify client connections</div>
+                        )}
                     </div>
 
                     <div>
