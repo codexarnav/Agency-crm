@@ -6,11 +6,13 @@ import { sendOnboardingEmail } from "./email.service.js";
 function generateUsername(name, dob) {
     const cleanName = (name || "").toLowerCase().replace(/\s+/g, "");
     if (!dob) return cleanName;
+    const match = dob.match(/\b\d{4}\b/);
+    if (match) {
+        return `${cleanName}@${match[0]}`;
+    }
     const parts = dob.split("-");
     if (parts.length === 3) {
-        // HTML date input is YYYY-MM-DD -> convert to DD-MM-YYYY
-        const formattedDob = `${parts[2]}-${parts[1]}-${parts[0]}`;
-        return `${cleanName}@${formattedDob}`;
+        return `${cleanName}@${parts[0]}`;
     }
     return `${cleanName}@${dob}`;
 }
@@ -96,6 +98,7 @@ export const CreateManager = async (
     await sendOnboardingEmail(
         newUser.name || newUser.username,
         newUser.email,
+        newUser.username,
         "MANAGER",
         password
     );
@@ -188,6 +191,7 @@ export const CreateEmployee = async (
     await sendOnboardingEmail(
         newUser.name || newUser.username,
         newUser.email,
+        newUser.username,
         "EMPLOYEE",
         password
     );

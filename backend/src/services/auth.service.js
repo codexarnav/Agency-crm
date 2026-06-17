@@ -113,7 +113,6 @@ export const loginUser = async ({
     let user;
 
     if (role === "CLIENT") {
-
         user = await prisma.client.findFirst({
             where: {
                 OR: [
@@ -123,17 +122,23 @@ export const loginUser = async ({
             },
         });
 
-        // Attach role for token generation (Client model has no role column)
         if (user) {
             user = { ...user, role: "CLIENT" };
         }
-
-    } else {
-
+    } else if (role) {
         user = await prisma.user.findFirst({
             where: {
                 role,
-
+                OR: [
+                    { email: identifier },
+                    { username: identifier },
+                ],
+            },
+        });
+    } else {
+        // Look up in User table first (any role)
+        user = await prisma.user.findFirst({
+            where: {
                 OR: [
                     { email: identifier },
                     { username: identifier },
@@ -141,6 +146,20 @@ export const loginUser = async ({
             },
         });
 
+        // If not found in User, check Client table
+        if (!user) {
+            user = await prisma.client.findFirst({
+                where: {
+                    OR: [
+                        { email: identifier },
+                        { username: identifier },
+                    ],
+                },
+            });
+            if (user) {
+                user = { ...user, role: "CLIENT" };
+            }
+        }
     }
 
     if (!user) {

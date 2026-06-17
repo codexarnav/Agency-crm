@@ -12,7 +12,7 @@ const transporter = nodemailer.createTransport({
     },
 });
 
-export const sendOnboardingEmail = async (name, email, role, temporaryPassword) => {
+export const sendOnboardingEmail = async (name, email, username, role, temporaryPassword) => {
     const loginUrl = process.env.FRONTEND_URL || "http://localhost:5173";
     const mailOptions = {
         from: `"Agency CRM" <${process.env.SMTP_USER}>`,
@@ -29,7 +29,11 @@ export const sendOnboardingEmail = async (name, email, role, temporaryPassword) 
                     <p>Here are your temporary login credentials:</p>
                     <table style="width: 100%; border-collapse: collapse; margin: 15px 0;">
                         <tr>
-                            <td style="padding: 8px; border: 1px solid #ddd; background-color: #f9f9f9; font-weight: bold; width: 30%;">Email:</td>
+                            <td style="padding: 8px; border: 1px solid #ddd; background-color: #f9f9f9; font-weight: bold; width: 30%;">Username:</td>
+                            <td style="padding: 8px; border: 1px solid #ddd; font-family: monospace; font-size: 14px;">${username}</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px; border: 1px solid #ddd; background-color: #f9f9f9; font-weight: bold;">Email:</td>
                             <td style="padding: 8px; border: 1px solid #ddd;">${email}</td>
                         </tr>
                         <tr>

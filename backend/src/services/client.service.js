@@ -71,6 +71,7 @@ export const createClient = async (data, loggedInUser) => {
     await sendOnboardingEmail(
         contactPerson || companyName || username,
         email,
+        username,
         "CLIENT",
         temporaryPassword
     ).catch(err => console.error("Error sending client onboarding email:", err));

@@ -68,12 +68,10 @@ function CreateManagerModal({ open, onClose, onSuccess }) {
 
   const getGeneratedUsername = () => {
     const cleanName = (form.name || "").toLowerCase().replace(/\s+/g, "");
-    if (!form.dob) return cleanName || "name@dob";
+    if (!form.dob) return cleanName || "name@year";
     const parts = form.dob.split("-");
-    if (parts.length === 3) {
-      return `${cleanName}@${parts[2]}-${parts[1]}-${parts[0]}`;
-    }
-    return `${cleanName}@${form.dob}`;
+    const year = parts[0];
+    return `${cleanName}@${year}`;
   };
 
   const validate = () => {
