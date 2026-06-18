@@ -176,11 +176,11 @@ const css = `
 
   .data-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   .data-table th {
-    text-align: left; padding: 10px 14px; font-size: 11.5px; font-weight: 700;
+    text-align: left; padding: 6px 10px; font-size: 11.5px; font-weight: 700;
     color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em;
     background: #F9FAFB; border-bottom: 1px solid var(--border);
   }
-  .data-table td { padding: 13px 14px; border-bottom: 1px solid #F3F4F6; color: var(--dark); vertical-align: middle; }
+  .data-table td { padding: 6px 10px; border-bottom: 1px solid #F3F4F6; color: var(--dark); vertical-align: middle; }
   .data-table tr:last-child td { border-bottom: none; }
   .data-table tr:hover td { background: #FAFAFA; }
   .data-table .td-actions { display: flex; align-items: center; gap: 6px; }
@@ -243,7 +243,7 @@ const css = `
   .divider { height: 1px; background: var(--border); margin: 16px 0; }
 
   .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
-  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
   .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
   .grid-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
 
@@ -321,8 +321,16 @@ const css = `
   .spin { animation: spin 1s linear infinite; }
   .fade-in { animation: fadeIn 0.3s ease; }
 
-  .hover-lift { transition: transform 0.15s, box-shadow 0.15s; }
-  .hover-lift:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+  .hover-lift { transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.22s ease; }
+  .hover-lift:hover { transform: translateY(-3px); box-shadow: 0 12px 24px -10px rgba(0,0,0,0.12), 0 4px 12px -5px rgba(0,0,0,0.06); border-color: rgba(255, 106, 0, 0.3); }
+
+  @keyframes slideInDrawer {
+    from { transform: translateX(100%); }
+    to { transform: translateX(0); }
+  }
+  .drawer-slide-in {
+    animation: slideInDrawer 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
 
   .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

@@ -817,14 +817,6 @@ function ClientsPage() {
                   );
                 }
               },
-              {
-                key: "contactPerson", label: "Contact", render: (v, row) => (
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600 }}>{v}</div>
-                    <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{row.email}</div>
-                  </div>
-                )
-              },
               { key: "packageName", label: "Package", hideOnMobile: true, render: v => <span style={{ fontSize: 12.5 }}>{v || " - "}</span> },
               {
                 key: "assignedAM", label: "Account Mgr", hideOnMobile: true, render: v => {

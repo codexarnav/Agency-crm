@@ -47,6 +47,10 @@ function AppShell({ session, logout, updateSession }) {
     if (window.location.pathname === "/client/settings/social") {
       return "settings_social";
     }
+    const role = session?.role;
+    if (role === "superadmin" || role === "manager") {
+      return "users";
+    }
     return "dashboard";
   });
 
@@ -258,7 +262,7 @@ function AppShell({ session, logout, updateSession }) {
       case "assets": return <BrandAssetsPage />;
       case "holidays": return <HolidayCalendarPage />;
       case "workspace": return <WorkspacePage />;
-      case "users": return <WorkspacePage />;
+      case "users": return <WorkspacePage teamOnly={true} />;
       case "publishing": return <AgencyTaskOverviewPage />;
       case "publishing_queue":
         if (role !== "superadmin" && role !== "manager") { setPage("dashboard"); return null; }

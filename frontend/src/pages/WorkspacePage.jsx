@@ -7,6 +7,7 @@ import {
   ProgressBar, DataTable, SearchBar,
 } from "../shared/components";
 import { getManagers, createManager, getEmployees, createEmployee, updateUser, deleteUser, getManagersPerformance } from "../services/api";
+import { TaskDetailDrawer } from "../shared/taskConstants";
 
 // AddUserModal
 function AddUserModal({ open, onClose, initial, onSave, employees, users }) {
@@ -83,14 +84,361 @@ function performanceStatus(pct) {
   return { label: "Critical", color: "#DC2626", bg: "#FEE2E2" };
 }
 
-function WorkspacePage() {
-  const { session, showToast, clients, tasks, employees, refreshEmployees } = useApp();
+/* =============================================================
+   COMPACT USER CARD COMPONENT
+============================================================= */
+function CompactUserCard({ u, allUsers, clients, tasks, employees, session, onEdit, onDelete, onView, openDropdownUserId, setOpenDropdownUserId }) {
+  const rc = {
+    superadmin: { bg: "#EEF2FF", color: "#4F46E5" },
+    manager: { bg: "var(--light-orange)", color: "var(--deep)" },
+    accountmanager: { bg: "#ECFDF5", color: "#059669" },
+    employee: { bg: "#EFF6FF", color: "#1D4ED8" }
+  }[u.role] || { bg: "#EFF6FF", color: "#1D4ED8" };
+
+  const isOnline = u.availability === "available" || u.active !== false;
+
+  let lastActive = "Active now";
+  if (u.availability === "busy") lastActive = "1h ago";
+  else if (u.availability === "on_leave") lastActive = "2d ago";
+  else if (u.availability === "not_available") lastActive = "4h ago";
+  else if (u.active === false) lastActive = "3d ago";
+
+  let metricChips = null;
+  if (u.role === "superadmin" || u.role === "manager") {
+    const reportsCount = employees.filter(e => e.assignedManager === u.id || e.managerId === u.id).length;
+    const clientCount = clients.filter(c => c.assignedManager === u.id).length;
+    const activeTasksCount = tasks.filter(t => clients.some(c => c.id === t.clientId && c.assignedManager === u.id) && t.productionStatus !== "completed").length;
+
+    metricChips = (
+      <>
+        <span style={{ fontSize: 11, background: "#F3F4F6", padding: "2px 8px", borderRadius: 6, display: "inline-flex", alignItems: "center", gap: 4, color: "var(--dark)" }} title="Team Members">
+          <span>👥</span> {reportsCount} Member{reportsCount !== 1 ? "s" : ""}
+        </span>
+        <span style={{ fontSize: 11, background: "#EFF6FF", padding: "2px 8px", borderRadius: 6, display: "inline-flex", alignItems: "center", gap: 4, color: "#1D4ED8" }} title="Clients">
+          <span>📁</span> {clientCount} Client{clientCount !== 1 ? "s" : ""}
+        </span>
+        <span style={{ fontSize: 11, background: "#FFF3E8", padding: "2px 8px", borderRadius: 6, display: "inline-flex", alignItems: "center", gap: 4, color: "var(--primary)" }} title="Active Tasks">
+          <span>✅</span> {activeTasksCount} Task{activeTasksCount !== 1 ? "s" : ""}
+        </span>
+      </>
+    );
+  } else if (u.role === "accountmanager") {
+    const clientCount = clients.filter(c => c.assignedAM === u.id).length;
+    const pendingApprovalsCount = tasks.filter(t => clients.some(c => c.id === t.clientId && c.assignedAM === u.id) && t.approvalStatus === "pending").length;
+    const scheduledCount = tasks.filter(t => clients.some(c => c.id === t.clientId && c.assignedAM === u.id) && t.publishingStatus === "scheduled").length;
+
+    metricChips = (
+      <>
+        <span style={{ fontSize: 11, background: "#EFF6FF", padding: "2px 8px", borderRadius: 6, display: "inline-flex", alignItems: "center", gap: 4, color: "#1D4ED8" }} title="Managed Clients">
+          <span>📁</span> {clientCount} Client{clientCount !== 1 ? "s" : ""}
+        </span>
+        <span style={{ fontSize: 11, background: "#FEF2F2", padding: "2px 8px", borderRadius: 6, display: "inline-flex", alignItems: "center", gap: 4, color: "var(--danger)" }} title="Pending Approvals">
+          <span>⏳</span> {pendingApprovalsCount} Pending
+        </span>
+        <span style={{ fontSize: 11, background: "#ECFDF5", padding: "2px 8px", borderRadius: 6, display: "inline-flex", alignItems: "center", gap: 4, color: "var(--success)" }} title="Scheduled Content">
+          <span>📅</span> {scheduledCount} Scheduled
+        </span>
+      </>
+    );
+  } else {
+    const mgr = allUsers.find(x => x.id === u.assignedManager);
+    const clientCount = clients.filter(c => tasks.some(t => t.clientId === c.id && t.assignedEmployeeId === u.id)).length;
+    const activeTasksCount = tasks.filter(t => t.assignedEmployeeId === u.id && t.productionStatus !== "completed").length;
+
+    metricChips = (
+      <>
+        {mgr && (
+          <span style={{ fontSize: 11, background: "#F3F4F6", padding: "2px 8px", borderRadius: 6, display: "inline-flex", alignItems: "center", gap: 4, color: "var(--dark)" }} title={`Reports to ${mgr.name}`}>
+            <span>👤</span> Mgr: {mgr.name.split(" ")[0]}
+          </span>
+        )}
+        <span style={{ fontSize: 11, background: "#EFF6FF", padding: "2px 8px", borderRadius: 6, display: "inline-flex", alignItems: "center", gap: 4, color: "#1D4ED8" }} title="Assigned Clients">
+          <span>📁</span> {clientCount} Client{clientCount !== 1 ? "s" : ""}
+        </span>
+        <span style={{ fontSize: 11, background: "#FFF3E8", padding: "2px 8px", borderRadius: 6, display: "inline-flex", alignItems: "center", gap: 4, color: "var(--primary)" }} title="Active Tasks">
+          <span>✅</span> {activeTasksCount} Task{activeTasksCount !== 1 ? "s" : ""}
+        </span>
+      </>
+    );
+  }
+
+  return (
+    <div 
+      className="card hover-lift" 
+      style={{ 
+        padding: "12px 14px", 
+        cursor: "pointer", 
+        display: "flex", 
+        flexDirection: "column", 
+        justifyContent: "space-between", 
+        minHeight: 145, 
+        maxHeight: 170,
+        boxShadow: "0 1.5px 4px rgba(0,0,0,0.04)", 
+        border: "1px solid var(--border)",
+        borderRadius: "14px"
+      }}
+      onClick={() => onView(u)}
+    >
+      <div>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ position: "relative" }}>
+              <Avatar name={u.name} src={u.profilePicture} size="md" />
+              <span 
+                style={{ 
+                  position: "absolute", bottom: -1, right: -1, width: 8, height: 8, 
+                  borderRadius: "50%", background: isOnline ? "var(--success)" : "#9CA3AF", 
+                  border: "1.5px solid #fff" 
+                }} 
+              />
+            </div>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 13, color: "var(--dark)" }}>{u.name}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 2 }}>
+                <span style={{ fontSize: 9.5, fontWeight: 700, padding: "1px 6px", borderRadius: 99, background: rc.bg, color: rc.color }}>
+                  {ROLE_META[u.role]?.label || u.role}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ position: "relative" }} onClick={e => e.stopPropagation()}>
+            <button 
+              onClick={(e) => { 
+                e.stopPropagation(); 
+                setOpenDropdownUserId(openDropdownUserId === u.id ? null : u.id); 
+              }} 
+              style={{ background: "none", border: "none", cursor: "pointer", padding: "4px", fontSize: 14, color: "var(--muted)", fontWeight: "bold" }}
+            >
+              ⋮
+            </button>
+            {openDropdownUserId === u.id && (
+              <div 
+                style={{ 
+                  position: "absolute", right: 0, top: "100%", background: "#fff", border: "1px solid var(--border)", 
+                  borderRadius: 8, boxShadow: "var(--shadow-md)", zIndex: 120, minWidth: 100 
+                }}
+              >
+                <button 
+                  onClick={() => { onEdit(u); setOpenDropdownUserId(null); }} 
+                  style={{ width: "100%", textAlign: "left", padding: "6px 10px", background: "none", border: "none", fontSize: 11.5, cursor: "pointer", fontWeight: 600, color: "var(--dark)" }}
+                  onMouseEnter={e => e.target.style.background = "#f5f5f5"}
+                  onMouseLeave={e => e.target.style.background = "none"}
+                >
+                  Edit
+                </button>
+                {u.id !== session?.id && (
+                  <button 
+                    onClick={() => { onDelete(u); setOpenDropdownUserId(null); }} 
+                    style={{ width: "100%", textAlign: "left", padding: "6px 10px", background: "none", border: "none", fontSize: 11.5, color: "var(--danger)", cursor: "pointer", fontWeight: 600 }}
+                    onMouseEnter={e => e.target.style.background = "#fef2f2"}
+                    onMouseLeave={e => e.target.style.background = "none"}
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 8 }}>
+          <a href={`mailto:${u.email}`} style={{ color: "var(--muted)", textDecoration: "none" }} onClick={e => e.stopPropagation()}>{u.email}</a>
+          {u.department && <div style={{ marginTop: 2, fontWeight: 500 }}>Team: <span style={{ color: "var(--dark)" }}>{u.department}</span></div>}
+        </div>
+      </div>
+
+      <div>
+        <div style={{ display: "flex", gap: 5, marginBottom: 8, flexWrap: "wrap" }}>
+          {metricChips}
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid #F3F4F6", paddingTop: 6 }}>
+          <span style={{ fontSize: 10, color: "var(--muted)" }}>Last active: {lastActive}</span>
+          <div style={{ display: "flex", gap: 8 }} onClick={e => e.stopPropagation()}>
+            <button 
+              onClick={() => onView(u)} 
+              style={{ background: "none", border: "none", color: "var(--primary)", fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}
+            >
+              View
+            </button>
+            <button 
+              onClick={() => onEdit(u)} 
+              style={{ background: "none", border: "none", color: "var(--muted)", fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}
+            >
+              Edit
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* =============================================================
+   RIGHT-SIDE SLIDE-OVER PROFILE DRAWER
+============================================================= */
+function ProfileDrawer({ user, open, onClose, employees, tasks, clients, allUsers }) {
+  if (!open || !user) return null;
+  
+  const uClients = clients.filter(c => c.assignedAM === user.id || c.assignedManager === user.id);
+  const uTasks = tasks.filter(t => t.assignedEmployeeId === user.id);
+  const activeTasks = uTasks.filter(t => t.productionStatus !== "completed");
+  
+  const userLogs = (MOCK.activityLogs || []).filter(log => log.userId === user.id).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 160, background: "rgba(0, 0, 0, 0.45)", backdropFilter: "blur(4px)", display: "flex", justifyContent: "flex-end" }} onClick={onClose}>
+      <div 
+        className="drawer-slide-in"
+        style={{ 
+          width: "min(520px, 100vw)", 
+          height: "100%", 
+          background: "var(--card)", 
+          boxShadow: "-4px 0 28px rgba(0,0,0,0.15)", 
+          display: "flex", 
+          flexDirection: "column", 
+          overflow: "hidden"
+        }} 
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ padding: "18px 24px", borderBottom: "1.5px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fafafa" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 18 }}>👤</span>
+            <h3 style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", fontWeight: 800, fontSize: 16, color: "var(--dark)" }}>Profile details</h3>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 24, display: "flex", alignItems: "center" }}>&times;</button>
+        </div>
+
+        <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16, alignItems: "center", paddingBottom: 20, borderBottom: "1px solid var(--border)", marginBottom: 20 }}>
+            <Avatar name={user.name} src={user.profilePicture} size="lg" style={{ width: 80, height: 80, fontSize: 32, boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }} />
+            <div style={{ textAlign: "center" }}>
+              <h3 style={{ fontSize: 20, fontWeight: 800, color: "var(--dark)" }}>{user.name}</h3>
+              <p style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}>{user.designation || "No Designation"}</p>
+              <div style={{ marginTop: 6 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, padding: "3px 10px", borderRadius: 99, background: "var(--light-orange)", color: "var(--primary)" }}>
+                  {user.role?.toUpperCase()}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div>
+              <h4 style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>User Information</h4>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {[
+                  ["Email Address", user.email],
+                  ["Phone Number", user.phoneNumber || user.phone || "—"],
+                  ["Team / Department", user.department || "—"],
+                  ["Availability Status", <span style={{ textTransform: "capitalize", fontWeight: 600, color: user.availability === "available" ? "var(--success)" : "var(--warning)" }}>{(user.availability || "available").replace("_", " ")}</span>],
+                  ["Reports to", allUsers.find(x => x.id === user.assignedManager)?.name || "—"]
+                ].map(([lbl, val]) => (
+                  <div key={lbl} style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid #f9fafb", paddingBottom: 6, fontSize: 13 }}>
+                    <span style={{ color: "var(--muted)", fontWeight: 500 }}>{lbl}</span>
+                    <span style={{ color: "var(--dark)", fontWeight: 600 }}>{val}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h4 style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>Workload & Clients</h4>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div style={{ background: "#F9FAFB", border: "1px solid var(--border)", borderRadius: 10, padding: 12, textAlign: "center" }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: "var(--primary)" }}>{activeTasks.length}</div>
+                  <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>Active Tasks</div>
+                </div>
+                <div style={{ background: "#F9FAFB", border: "1px solid var(--border)", borderRadius: 10, padding: 12, textAlign: "center" }}>
+                  <div style={{ fontSize: 20, fontWeight: 800, color: "var(--dark)" }}>{uClients.length}</div>
+                  <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 2 }}>Assigned Clients</div>
+                </div>
+              </div>
+            </div>
+
+            {activeTasks.length > 0 && (
+              <div>
+                <h4 style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Active Tasks ({activeTasks.length})</h4>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 180, overflowY: "auto" }}>
+                  {activeTasks.map(t => (
+                    <div key={t.id} style={{ padding: "8px 12px", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12.5, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, marginRight: 8 }}>
+                        <div style={{ fontWeight: 600, color: "var(--dark)" }}>{t.contentDescription}</div>
+                        <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 2 }}>{t.clientName} &bull; {t.platform}</div>
+                      </div>
+                      <StatusBadge label={t.productionStatus.replace("_", " ")} s={t.productionStatus} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {uClients.length > 0 && (
+              <div>
+                <h4 style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Assigned Clients ({uClients.length})</h4>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {uClients.map(c => (
+                    <span key={c.id} style={{ fontSize: 12, background: "#EFF6FF", color: "#1D4ED8", padding: "3px 10px", borderRadius: 99, fontWeight: 600 }}>
+                      {c.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <h4 style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>Activity History</h4>
+              {userLogs.length === 0 ? (
+                <div style={{ fontSize: 12, color: "var(--muted)", fontStyle: "italic" }}>No recent actions logged for this user.</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, paddingLeft: 6 }}>
+                  {userLogs.slice(0, 5).map(log => (
+                    <div key={log.id} style={{ display: "flex", gap: 10, position: "relative" }}>
+                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--primary)", marginTop: 6, flexShrink: 0 }} />
+                      <div style={{ fontSize: 12.5 }}>
+                        <span style={{ color: "var(--dark)", fontWeight: 500 }}>
+                          {log.action.replace("_", " ")}
+                        </span>
+                        {log.details?.taskTitle && <span>: {log.details.taskTitle}</span>}
+                        <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 2 }}>{new Date(log.timestamp).toLocaleDateString()} &bull; {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function WorkspacePage({ teamOnly = false }) {
+  const { session, showToast, clients, tasks, employees, refreshEmployees, refreshTasks } = useApp();
   const [tab, setTab] = useState("users");
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedUserProfile, setSelectedUserProfile] = useState(null);
+
+  const [openDropdownUserId, setOpenDropdownUserId] = useState(null);
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    const handleCloseDropdown = () => setOpenDropdownUserId(null);
+    window.addEventListener("click", handleCloseDropdown);
+    return () => window.removeEventListener("click", handleCloseDropdown);
+  }, []);
 
   const [managersPerfData, setManagersPerfData] = useState([]);
   const [perfLoading, setPerfLoading] = useState(false);
+
+  useEffect(() => {
+    if (teamOnly) {
+      setTab("users");
+    }
+  }, [teamOnly]);
 
   const fetchUsers = async () => {
     try {
@@ -225,66 +573,319 @@ function WorkspacePage() {
   return (
     <div className="fade-in">
       <div className="page-header flex-between" style={{ flexWrap: "wrap", gap: 12 }}>
-        <div><h1 className="page-title">Workspace</h1><p className="page-subtitle">Manage users, access levels, and performance.</p></div>
+        <div>
+          <h1 className="page-title">{teamOnly ? "Team" : "Workspace"}</h1>
+          <p className="page-subtitle">{teamOnly ? "Manage employees and managers." : "Manage users, access levels, and performance."}</p>
+        </div>
         <Btn icon={<SvgIcon name="arrowRight" size={13} color="#fff" />} onClick={() => { setEditUser(null); setAddOpen(true); }}>Add User</Btn>
       </div>
-      <div style={{ display: "flex", gap: 4, marginBottom: 20, borderBottom: "1px solid var(--border)" }}>
-        {[{ id: "users", label: "All Users" }, { id: "performance", label: "Performance" }].map(t => (
-          <button key={t.id} onClick={() => setTab(t.id)} style={{ padding: "9px 18px", border: "none", borderRadius: "8px 8px 0 0", background: tab === t.id ? "var(--light-orange)" : "transparent", color: tab === t.id ? "var(--primary)" : "var(--muted)", fontWeight: tab === t.id ? 700 : 500, fontSize: 13.5, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", borderBottom: tab === t.id ? "2.5px solid var(--primary)" : "2.5px solid transparent" }}>{t.label}</button>
-        ))}
-      </div>
+
+      {!teamOnly && (
+        <div style={{ display: "flex", gap: 4, marginBottom: 20, borderBottom: "1px solid var(--border)" }}>
+          {[{ id: "users", label: "All Users" }, { id: "performance", label: "Performance" }].map(t => (
+            <button key={t.id} onClick={() => setTab(t.id)} style={{ padding: "9px 18px", border: "none", borderRadius: "8px 8px 0 0", background: tab === t.id ? "var(--light-orange)" : "transparent", color: tab === t.id ? "var(--primary)" : "var(--muted)", fontWeight: tab === t.id ? 700 : 500, fontSize: 13.5, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", borderBottom: tab === t.id ? "2.5px solid var(--primary)" : "2.5px solid transparent" }}>{t.label}</button>
+          ))}
+        </div>
+      )}
+
       {tab === "users" && (
         <div>
-          <div className="grid-stats" style={{ marginBottom: 20 }}>
-            {[["Total", allUsers.length, "var(--dark)"], ["Super Admins", allUsers.filter(u => u.role === "superadmin").length, "#4F46E5"], ["Managers", managers.length, "var(--primary)"], ["Account Managers", ams.length, "#059669"], ["Employees", allUsers.filter(u => u.role === "employee").length, "#1D4ED8"]].map(([l, v, c]) => (
-              <div key={l} className="stat-card" style={{ padding: "12px 16px", textAlign: "center" }}><div style={{ fontFamily: "'Plus Jakarta Sans',sans-serif", fontSize: 22, fontWeight: 800, color: c }}>{v}</div><div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 3 }}>{l}</div></div>
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
-            <SearchBar value={search} onChange={setSearch} placeholder="Search users..." style={{ flex: "1 1 200px", minWidth: 180 }} />
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {[["all", "All"], ["superadmin", "Super Admin"], ["manager", "Manager"], ["accountmanager", "Account Manager"], ["employee", "Employee"]].map(([v, l]) => (
-                <button key={v} className={`filter-chip ${filterAccess === v ? "active" : ""}`} onClick={() => setFilterAccess(v)} style={{ fontSize: 12 }}>{l}</button>
+          {/* Horizontal KPI Grid */}
+          {!teamOnly && (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 14, marginBottom: 20 }}>
+              {[
+                ["Users", allUsers.length, "👤", "var(--primary)"],
+                ["Clients", clients.length, "📁", "#059669"],
+                ["Tasks", tasks.filter(t => t.productionStatus !== "completed").length, "✅", "#1D4ED8"]
+              ].map(([l, v, icon, c]) => (
+                <div key={l} style={{ background: "var(--card)", padding: "10px 14px", borderRadius: 12, border: "1.5px solid var(--border)", display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 8, background: `${c}10`, color: c, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: "bold" }}>
+                    {icon}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: "var(--dark)", fontFamily: "'Plus Jakarta Sans',sans-serif" }}>{v}</div>
+                    <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600 }}>{l}</div>
+                  </div>
+                </div>
               ))}
             </div>
-          </div>
-          <div className="grid-3">
-            {filtered.length === 0 ? (<div style={{ gridColumn: "1/-1" }}><EmptyState icon={<SvgIcon name="users" size={28} color="var(--muted)" />} title="No users found" desc="Add your first team member." /></div>)
-              : filtered.map(u => {
-                const rc = roleColors[u.role] || roleColors.employee;
-                const uClients = clients.filter(c => c.assignedAM === u.id || c.assignedManager === u.id).length;
-                const uTasks = tasks.filter(t => t.assignedEmployeeId === u.id && t.productionStatus !== "completed").length;
-                const mgr = allUsers.find(x => x.id === u.assignedManager);
-                return (
-                  <div key={u.id} className="card hover-lift" style={{ padding: 18 }}>
-                    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 12 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <Avatar name={u.name} size="lg" />
-                        <div>
-                          <div style={{ fontWeight: 800, fontSize: 14 }}>{u.name}</div>
-                          <div style={{ fontSize: 12, color: "var(--muted)" }}>{u.designation || "'"}</div>
-                          <div style={{ marginTop: 4 }}><span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 99, background: rc.bg, color: rc.color }}>{ROLE_META[u.role]?.label || u.role}</span></div>
-                        </div>
+          )}
+
+          {teamOnly ? (
+            /* TEAM ONLY PAGE: Plain cards list with 3 columns */
+            <div>
+              <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+                <SearchBar value={search} onChange={setSearch} placeholder="Search users..." style={{ flex: "1 1 200px", minWidth: 180 }} />
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {[["all", "All"], ["superadmin", "Super Admin"], ["manager", "Manager"], ["accountmanager", "Account Manager"], ["employee", "Employee"]].map(([v, l]) => (
+                    <button key={v} className={`filter-chip ${filterAccess === v ? "active" : ""}`} onClick={() => setFilterAccess(v)} style={{ fontSize: 12 }}>{l}</button>
+                  ))}
+                </div>
+              </div>
+
+              {filtered.length === 0 ? (
+                <EmptyState icon={<SvgIcon name="users" size={28} color="var(--muted)" />} title="No users found" desc="Add your first team member." />
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                  {filtered.filter(u => u.role === "superadmin" || u.role === "manager").length > 0 && (
+                    <div>
+                      <h3 style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Managers</h3>
+                      <div className="grid-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(310px, 1fr))" }}>
+                        {filtered.filter(u => u.role === "superadmin" || u.role === "manager").map(u => (
+                          <CompactUserCard 
+                            key={u.id}
+                            u={u}
+                            allUsers={allUsers}
+                            clients={clients}
+                            tasks={tasks}
+                            employees={employees}
+                            session={session}
+                            onEdit={setEditUser}
+                            onDelete={setDeleteTarget}
+                            onView={setSelectedUserProfile}
+                            openDropdownUserId={openDropdownUserId}
+                            setOpenDropdownUserId={setOpenDropdownUserId}
+                          />
+                        ))}
                       </div>
-                      <span style={{ width: 8, height: 8, borderRadius: "50%", background: u.active !== false ? "var(--success)" : "#9CA3AF", display: "block", flexShrink: 0, marginTop: 4 }} />
                     </div>
-                    <div style={{ fontSize: 12.5, color: "var(--muted)", marginBottom: 8 }}>
-                      <div style={{ marginBottom: 3 }}>{u.email}</div>
-                      {u.department && <div>{u.department}</div>}
-                      {mgr && <div>Reports to: <span style={{ fontWeight: 600, color: "var(--dark)" }}>{mgr.name}</span></div>}
+                  )}
+
+                  {filtered.filter(u => u.role === "superadmin" || u.role === "manager").length > 0 && 
+                   filtered.filter(u => u.role === "employee" || u.role === "accountmanager").length > 0 && (
+                    <div style={{ borderTop: "2.5px dashed var(--border)", margin: "8px 0" }} />
+                  )}
+
+                  {filtered.filter(u => u.role === "employee" || u.role === "accountmanager").length > 0 && (
+                    <div>
+                      <h3 style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>Employees & Account Managers</h3>
+                      <div className="grid-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(310px, 1fr))" }}>
+                        {filtered.filter(u => u.role === "employee" || u.role === "accountmanager").map(u => (
+                          <CompactUserCard 
+                            key={u.id}
+                            u={u}
+                            allUsers={allUsers}
+                            clients={clients}
+                            tasks={tasks}
+                            employees={employees}
+                            session={session}
+                            onEdit={setEditUser}
+                            onDelete={setDeleteTarget}
+                            onView={setSelectedUserProfile}
+                            openDropdownUserId={openDropdownUserId}
+                            setOpenDropdownUserId={setOpenDropdownUserId}
+                          />
+                        ))}
+                      </div>
                     </div>
-                    <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                      {uClients > 0 && <span style={{ fontSize: 11.5, background: "#F3F4F6", padding: "2px 8px", borderRadius: 99, fontWeight: 600, color: "var(--dark)" }}>{uClients} client{uClients > 1 ? "s" : ""}</span>}
-                      {uTasks > 0 && <span style={{ fontSize: 11.5, background: "#FFF3E8", padding: "2px 8px", borderRadius: 99, fontWeight: 600, color: "var(--primary)" }}>{uTasks} tasks</span>}
-                    </div>
-                    <div style={{ display: "flex", gap: 6, paddingTop: 10, borderTop: "1px solid var(--border)" }}>
-                      <button onClick={() => setEditUser(u)} style={{ flex: 1, padding: "5px 10px", borderRadius: 7, border: "1.5px solid var(--border)", background: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600, color: "var(--dark)", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}><SvgIcon name="pen" size={12} color="var(--muted)" />Edit</button>
-                      {u.id !== session?.id && <button onClick={() => setDeleteTarget(u)} style={{ padding: "5px 10px", borderRadius: 7, border: "1.5px solid #FEE2E2", background: "#FEF2F2", cursor: "pointer", fontSize: 12, fontWeight: 600, color: "var(--danger)" }}>Remove</button>}
-                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* WORKSPACE DASHBOARD VIEW: 2-column Layout */
+            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 20, alignItems: "start" }}>
+              {/* Left Column: Team Overview & Hierarchy Preview */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                {/* 1. Team Overview */}
+                <div className="card" style={{ padding: 18 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 8 }}>
+                    <h3 style={{ fontSize: 14, fontWeight: 800, color: "var(--dark)" }}>1. Team Overview</h3>
+                    <SearchBar value={search} onChange={setSearch} placeholder="Search team..." style={{ padding: "4px 8px", minWidth: 140, fontSize: 11.5 }} />
                   </div>
-                );
-              })}
-          </div>
+                  
+                  <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 12 }}>
+                    {[["all", "All"], ["superadmin", "Super Admin"], ["manager", "Manager"], ["accountmanager", "Account AM"], ["employee", "Employee"]].map(([v, l]) => (
+                      <button key={v} className={`filter-chip ${filterAccess === v ? "active" : ""}`} onClick={() => setFilterAccess(v)} style={{ fontSize: 11, padding: "3px 8px" }}>{l}</button>
+                    ))}
+                  </div>
+
+                  {filtered.length === 0 ? (
+                    <div style={{ padding: "20px 0" }}>
+                      <EmptyState icon={<SvgIcon name="users" size={22} color="var(--muted)" />} title="No users found" desc="" />
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                      {filtered.filter(u => u.role === "superadmin" || u.role === "manager").length > 0 && (
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Managers</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12 }}>
+                            {filtered.filter(u => u.role === "superadmin" || u.role === "manager").map(u => (
+                              <CompactUserCard 
+                                key={u.id}
+                                u={u}
+                                allUsers={allUsers}
+                                clients={clients}
+                                tasks={tasks}
+                                employees={employees}
+                                session={session}
+                                onEdit={setEditUser}
+                                onDelete={setDeleteTarget}
+                                onView={setSelectedUserProfile}
+                                openDropdownUserId={openDropdownUserId}
+                                setOpenDropdownUserId={setOpenDropdownUserId}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {filtered.filter(u => u.role === "superadmin" || u.role === "manager").length > 0 && 
+                       filtered.filter(u => u.role === "employee" || u.role === "accountmanager").length > 0 && (
+                        <div style={{ borderTop: "2px dashed var(--border)", margin: "4px 0" }} />
+                      )}
+
+                      {filtered.filter(u => u.role === "employee" || u.role === "accountmanager").length > 0 && (
+                        <div>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Employees & Account Managers</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: 12 }}>
+                            {filtered.filter(u => u.role === "employee" || u.role === "accountmanager").map(u => (
+                              <CompactUserCard 
+                                key={u.id}
+                                u={u}
+                                allUsers={allUsers}
+                                clients={clients}
+                                tasks={tasks}
+                                employees={employees}
+                                session={session}
+                                onEdit={setEditUser}
+                                onDelete={setDeleteTarget}
+                                onView={setSelectedUserProfile}
+                                openDropdownUserId={openDropdownUserId}
+                                setOpenDropdownUserId={setOpenDropdownUserId}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* 4. Team Hierarchy Preview */}
+                <div className="card" style={{ padding: 18 }}>
+                  <h3 style={{ fontSize: 14, fontWeight: 800, color: "var(--dark)", marginBottom: 12 }}>4. Team Hierarchy Preview</h3>
+                  {(() => {
+                    const managersList = allUsers.filter(u => u.role === "superadmin" || u.role === "manager");
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                        {managersList.map(mgr => {
+                          const reports = allUsers.filter(u => u.assignedManager === mgr.id);
+                          return (
+                            <div key={mgr.id} style={{ background: "#FAFAFA", border: "1px solid var(--border)", borderRadius: 10, padding: 12 }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: reports.length > 0 ? 10 : 0 }}>
+                                <Avatar name={mgr.name} src={mgr.profilePicture} size="sm" />
+                                <div>
+                                  <div style={{ fontWeight: 700, fontSize: 12.5, color: "var(--dark)" }}>{mgr.name}</div>
+                                  <div style={{ fontSize: 10.5, color: "var(--muted)" }}>{mgr.designation || "Manager"}</div>
+                                </div>
+                              </div>
+                              {reports.length > 0 && (
+                                <div style={{ borderLeft: "2px solid var(--border)", marginLeft: 14, paddingLeft: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+                                  {reports.map(emp => (
+                                    <div key={emp.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                      <Avatar name={emp.name} src={emp.profilePicture} size="sm" style={{ width: 22, height: 22, fontSize: 9 }} />
+                                      <div>
+                                        <div style={{ fontWeight: 600, fontSize: 11.5, color: "var(--dark)" }}>{emp.name}</div>
+                                        <div style={{ fontSize: 9.5, color: "var(--muted)" }}>{emp.designation || "Employee"}</div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Right Column: Pending Work & Recent Activity */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                {/* 3. Pending Work */}
+                <div className="card" style={{ padding: 18 }}>
+                  <h3 style={{ fontSize: 14, fontWeight: 800, color: "var(--dark)", marginBottom: 12 }}>3. Pending Work</h3>
+                  {(() => {
+                    const pendingTasks = tasks.filter(t => 
+                      t.productionStatus === "ready_for_review" || 
+                      t.approvalStatus === "pending" || 
+                      (t.internalDeadline && new Date(t.internalDeadline) < new Date() && t.productionStatus !== "completed")
+                    );
+
+                    if (pendingTasks.length === 0) {
+                      return <div style={{ fontSize: 12, color: "var(--muted)", fontStyle: "italic", textAlign: "center", padding: "10px 0" }}>No urgent pending work. Good job!</div>;
+                    }
+
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {pendingTasks.slice(0, 5).map(t => {
+                          const isOverdue = t.internalDeadline && new Date(t.internalDeadline) < new Date() && t.productionStatus !== "completed";
+                          return (
+                            <div 
+                              key={t.id} 
+                              onClick={() => { setSelectedTask(t); setDrawerOpen(true); }}
+                              style={{ 
+                                padding: 10, border: "1px solid var(--border)", borderRadius: 8, background: "#fff", 
+                                cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center",
+                                transition: "all 0.12s"
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.borderColor = "var(--primary)"}
+                              onMouseLeave={e => e.currentTarget.style.borderColor = "var(--border)"}
+                            >
+                              <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--dark)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.contentDescription}</div>
+                                <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 2 }}>{t.clientName} &bull; {t.platform}</div>
+                              </div>
+                              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
+                                <StatusBadge label={t.productionStatus.replace("_", " ")} s={t.productionStatus} />
+                                {t.internalDeadline && (
+                                  <span style={{ fontSize: 9.5, color: isOverdue ? "var(--danger)" : "var(--muted)", fontWeight: isOverdue ? 700 : 500 }}>
+                                    {isOverdue ? "Overdue" : t.internalDeadline}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* 2. Recent Activity */}
+                <div className="card" style={{ padding: 18 }}>
+                  <h3 style={{ fontSize: 14, fontWeight: 800, color: "var(--dark)", marginBottom: 12 }}>2. Recent Activity</h3>
+                  {(() => {
+                    const activity = (MOCK.activityLogs || []).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    if (activity.length === 0) {
+                      return <div style={{ fontSize: 12, color: "var(--muted)", fontStyle: "italic", textAlign: "center", padding: "10px 0" }}>No recent activity.</div>;
+                    }
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                        {activity.slice(0, 5).map(log => {
+                          const logUser = allUsers.find(x => x.id === log.userId);
+                          return (
+                            <div key={log.id} style={{ display: "flex", gap: 10 }}>
+                              <div style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--primary)", marginTop: 5, flexShrink: 0 }} />
+                              <div>
+                                <div style={{ fontSize: 12.5, color: "var(--dark)" }}>
+                                  <strong style={{ fontWeight: 700 }}>{logUser ? logUser.name : "System"}</strong> {log.action.replace("_", " ")}
+                                  {log.details?.taskTitle && <span>: {log.details.taskTitle}</span>}
+                                </div>
+                                <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 2 }}>{new Date(log.timestamp).toLocaleDateString()} at {new Date(log.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
       {tab === "performance" && (
@@ -385,7 +986,32 @@ function WorkspacePage() {
           </div>
         </div>
       )}
+      
+      <ProfileDrawer
+        user={selectedUserProfile}
+        open={!!selectedUserProfile}
+        onClose={() => setSelectedUserProfile(null)}
+        employees={employees}
+        tasks={tasks}
+        clients={clients}
+        allUsers={allUsers}
+      />
+
+      <TaskDetailDrawer 
+        task={selectedTask} 
+        open={drawerOpen} 
+        onClose={() => { setDrawerOpen(false); setSelectedTask(null); }} 
+        employees={employees} 
+        onStatusUpdate={updated => { 
+          const all = LSUtils.getData(LS_KEYS.TASKS) || []; 
+          LSUtils.setData(LS_KEYS.TASKS, all.map(t => t.id === updated.id ? updated : t)); 
+          refreshTasks(); 
+          setSelectedTask(updated); 
+        }} 
+      />
+
       <AddUserModal open={addOpen || !!editUser} onClose={() => { setAddOpen(false); setEditUser(null); }} initial={editUser} onSave={handleSave} employees={employees} users={users} />
+      
       <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Remove User" footer={<><Btn variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Btn><Btn variant="danger" onClick={() => handleDelete(deleteTarget)}>Remove</Btn></>}>
         <p style={{ fontSize: 14, lineHeight: 1.6 }}>Remove <strong>{deleteTarget?.name}</strong> from the workspace?</p>
       </Modal>

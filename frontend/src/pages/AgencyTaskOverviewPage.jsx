@@ -15,6 +15,23 @@ import {
   PUB_STATUSES_LIST, PUB_LABELS_MAP, PRIORITIES_LIST, PRIO_LABELS_MAP, PLATFORMS_LIST,
 } from "../shared/taskConstants";
 
+function getDaysLeft(dateStr) {
+  if (!dateStr) return " - ";
+  const target = new Date(dateStr);
+  if (isNaN(target.getTime())) return dateStr;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const targetDate = new Date(target);
+  targetDate.setHours(0, 0, 0, 0);
+  const diffTime = targetDate.getTime() - today.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Tomorrow";
+  if (diffDays === -1) return "1d overdue";
+  if (diffDays < -1) return `${Math.abs(diffDays)}d overdue`;
+  return `${diffDays} days left`;
+}
+
 function AgencyTaskOverviewPage() {
   const { clients, employees, session, showToast, tasks, refreshTasks } = useApp();
   const [viewBy, setViewBy] = useState("client");
@@ -41,6 +58,25 @@ function AgencyTaskOverviewPage() {
   const sorted = [...filtered].sort((a, b) => new Date(a.internalDeadline || "9999") - new Date(b.internalDeadline || "9999"));
 
   const stats = { total: filtered.length, inProd: filtered.filter(t => t.productionStatus === "in_progress").length, review: filtered.filter(t => t.productionStatus === "ready_for_review").length, approved: filtered.filter(t => ["client_approved", "final_approved"].includes(t.approvalStatus)).length, overdue: filtered.filter(t => t.internalDeadline && new Date(t.internalDeadline) < new Date() && t.productionStatus !== "completed").length, blocked: filtered.filter(t => t.productionStatus === "blocked").length };
+
+  const groupedTasks = {};
+  sorted.forEach(t => {
+    const key = t.postingDate || "Unscheduled";
+    if (!groupedTasks[key]) {
+      groupedTasks[key] = {
+        date: t.postingDate,
+        day: t.day || "",
+        tasks: []
+      };
+    }
+    groupedTasks[key].tasks.push(t);
+  });
+
+  const sortedDateKeys = Object.keys(groupedTasks).sort((a, b) => {
+    if (a === "Unscheduled") return 1;
+    if (b === "Unscheduled") return -1;
+    return new Date(a) - new Date(b);
+  });
 
   return (
     <div className="fade-in">
@@ -93,41 +129,68 @@ function AgencyTaskOverviewPage() {
         <span style={{ marginLeft: "auto", fontSize: 12.5, color: "var(--muted)", alignSelf: "center" }}>{filtered.length} tasks</span>
       </div>
 
-      <div className="card" style={{ overflow: "hidden" }}>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: "#F9FAFB" }}>
-                {["Task", "Client", "Platform", "Assigned", "Deadline", "Prod Status", "Approval", "Publishing", "Priority"].map(h => (
-                  <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: "2px solid var(--border)", whiteSpace: "nowrap" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.length === 0 ? <tr><td colSpan={9} style={{ textAlign: "center", padding: "40px", color: "var(--muted)" }}>No tasks match the current filters.</td></tr>
-                : sorted.map(t => {
-                  const emp = employees.find(e => e.id === t.assignedEmployeeId);
-                  const isOverdue = t.internalDeadline && new Date(t.internalDeadline) < new Date() && t.productionStatus !== "completed";
-                  return (
-                    <tr key={t.id} onClick={() => { setSelectedTask(t); setDrawerOpen(true); }} style={{ cursor: "pointer" }} onMouseEnter={e => e.currentTarget.style.background = "#FAFAFA"} onMouseLeave={e => e.currentTarget.style.background = ""}>
-                      <td style={{ padding: "11px 12px" }}>
-                        <div style={{ fontWeight: 600, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.contentDescription}</div>
-                        <div style={{ fontSize: 11.5, color: "var(--muted)" }}>{t.contentType}{t.assignmentType === "ai_assigned" ? <span style={{ marginLeft: 5 }}><AIBadgeSmall /></span> : null}</div>
-                      </td>
-                      <td style={{ padding: "11px 12px", fontSize: 12.5 }}>{t.clientName}</td>
-                      <td style={{ padding: "11px 12px", fontSize: 12.5 }}>{t.platform}</td>
-                      <td style={{ padding: "11px 12px" }}>{emp ? <div style={{ display: "flex", alignItems: "center", gap: 6 }}><Avatar name={emp.name || emp.username} size={22} /><span style={{ fontSize: 12 }}>{(emp.name || emp.username || "").split(" ")[0]}</span></div> : <span style={{ color: "#9CA3AF", fontSize: 12 }}> - </span>}</td>
-                      <td style={{ padding: "11px 12px" }}><span style={{ fontSize: 12.5, color: isOverdue ? "var(--danger)" : "#374151", fontWeight: isOverdue ? 700 : 400 }}>{t.internalDeadline || " - "}{isOverdue && " !"}</span></td>
-                      <td style={{ padding: "11px 12px" }}><ProdMBadge s={t.productionStatus} /></td>
-                      <td style={{ padding: "11px 12px" }}><ApprovMBadge s={t.approvalStatus} /></td>
-                      <td style={{ padding: "11px 12px" }}><PubMBadge s={t.publishingStatus} /></td>
-                      <td style={{ padding: "11px 12px" }}><PrioMBadge s={t.priority} /></td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
-        </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+        {sortedDateKeys.length === 0 ? (
+          <div className="card" style={{ padding: 40, textAlign: "center" }}>
+            <EmptyState icon={<SvgIcon name="checklist" size={28} color="var(--primary)" />} title="No tasks found" desc="Try adjusting your filters." />
+          </div>
+        ) : (
+          sortedDateKeys.map(dateKey => {
+            const group = groupedTasks[dateKey];
+            const dateTitle = dateKey === "Unscheduled" 
+              ? "📋 Unscheduled Tasks" 
+              : `📅 ${new Date(group.date).toLocaleDateString("en-IN", { weekday: "long", year: "numeric", month: "short", day: "numeric" })}`;
+            
+            return (
+              <div key={dateKey} className="card" style={{ overflow: "hidden" }}>
+                <div style={{ background: "#F3F4F6", padding: "10px 16px", borderBottom: "1.5px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontWeight: 700, fontSize: 13.5, color: "var(--dark)" }}>{dateTitle}</span>
+                  <span className="badge badge-muted" style={{ fontSize: 11, background: "#E5E7EB", color: "var(--dark)" }}>{group.tasks.length} task{group.tasks.length !== 1 ? "s" : ""}</span>
+                </div>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: "#F9FAFB" }}>
+                        {["Client", "Task", "Platform", "Assigned", "Deadline", "Prod Status", "Approval", "Publishing"].map(h => (
+                          <th key={h} style={{ textAlign: "left", padding: "8px 12px", fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: "1.5px solid var(--border)", whiteSpace: "nowrap" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.tasks.map(t => {
+                        const emp = employees.find(e => e.id === t.assignedEmployeeId);
+                        const isOverdue = t.internalDeadline && new Date(t.internalDeadline) < new Date() && t.productionStatus !== "completed";
+                        return (
+                          <tr key={t.id} onClick={() => { setSelectedTask(t); setDrawerOpen(true); }} style={{ cursor: "pointer", borderBottom: "1px solid #F3F4F6" }} onMouseEnter={e => e.currentTarget.style.background = "#FAFAFA"} onMouseLeave={e => e.currentTarget.style.background = ""}>
+                            <td style={{ padding: "10px 12px", fontSize: 12.5, fontWeight: 600 }}>{t.clientName}</td>
+                            <td style={{ padding: "10px 12px" }}>
+                              <div style={{ display: "flex", alignItems: "center" }}>
+                                <span style={{ fontWeight: 700, maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: "var(--dark)" }}>{t.contentDescription}</span>
+                                {(t.priority === "high" || t.priority === "urgent") && (
+                                  <span 
+                                    onClick={(e) => { e.stopPropagation(); alert("High Priority"); }} 
+                                    style={{ display: "inline-block", width: 7, height: 7, borderRadius: "50%", background: "var(--danger)", marginLeft: 6, cursor: "pointer", flexShrink: 0 }} 
+                                  />
+                                )}
+                              </div>
+                              <div style={{ fontSize: 11, color: "var(--muted)" }}>{t.contentType}{t.assignmentType === "ai_assigned" ? <span style={{ marginLeft: 5 }}><AIBadgeSmall /></span> : null}</div>
+                            </td>
+                            <td style={{ padding: "10px 12px", fontSize: 12.5 }}>{t.platform}</td>
+                            <td style={{ padding: "10px 12px" }}>{emp ? <div style={{ display: "flex", alignItems: "center", gap: 6 }}><Avatar name={emp.name || emp.username} size={22} /><span style={{ fontSize: 12 }}>{(emp.name || emp.username || "").split(" ")[0]}</span></div> : <span style={{ color: "#9CA3AF", fontSize: 12 }}> - </span>}</td>
+                            <td style={{ padding: "10px 12px" }}><span style={{ fontSize: 12.5, color: isOverdue ? "var(--danger)" : "#374151", fontWeight: isOverdue ? 700 : 400 }}>{getDaysLeft(t.internalDeadline)}{isOverdue && " !"}</span></td>
+                            <td style={{ padding: "10px 12px" }}><ProdMBadge s={t.productionStatus} /></td>
+                            <td style={{ padding: "10px 12px" }}><ApprovMBadge s={t.approvalStatus} /></td>
+                            <td style={{ padding: "10px 12px" }}><PubMBadge s={t.publishingStatus} /></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       <TaskDetailDrawer task={selectedTask} open={drawerOpen} onClose={() => { setDrawerOpen(false); setSelectedTask(null); }} employees={employees} onStatusUpdate={updated => { const all = LSUtils.getData(LS_KEYS.TASKS) || []; LSUtils.setData(LS_KEYS.TASKS, all.map(t => t.id === updated.id ? updated : t)); refreshTasks(); setSelectedTask(updated); }} />

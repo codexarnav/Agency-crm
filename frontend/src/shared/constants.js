@@ -195,14 +195,12 @@ export const NAV_CONFIG = {
   superadmin: [
     {
       label: "Overview", items: [
-        { id: "dashboard", label: "Company Overview", iconName: "dashboard" },
         { id: "workspace", label: "Workspace", iconName: "settings" },
       ]
     },
     {
       label: "User Management", items: [
-        { id: "managers", label: "Managers", iconName: "shield" },
-        { id: "employees_mgmt", label: "Team", iconName: "users" },
+        { id: "users", label: "Team", iconName: "users" },
       ]
     },
     {
@@ -239,13 +237,8 @@ export const NAV_CONFIG = {
   ],
   manager: [
     {
-      label: "Overview", items: [
-        { id: "dashboard", label: "Company Overview", iconName: "dashboard" },
-      ]
-    },
-    {
       label: "User Management", items: [
-        { id: "employees_mgmt", label: "Team", iconName: "users" },
+        { id: "users", label: "Team", iconName: "users" },
       ]
     },
     {
