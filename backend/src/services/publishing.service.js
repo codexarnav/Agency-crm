@@ -1,6 +1,7 @@
 import prisma from "../config/prisma.js";
 import { createNotification } from "./notifications.service.js";
 import { addPublishingJob } from "../config/publishingQueue.js";
+import { deletePost as deletePostFromProxy } from "./postproxy.service.js";
 
 // Helper to notify the assigned employee or creative lead
 const notifyAssignee = async (job, type, content, senderId) => {
@@ -85,12 +86,12 @@ export const schedulePost = async (data, loggedInUser) => {
     }
 
     // 1. Social connection validation before scheduling
-    const metaConn = await prisma.metaConnection.findUnique({
+    const socialConns = await prisma.socialConnection.findMany({
         where: { clientId },
     });
 
-    if (!metaConn) {
-        throw new Error("This client has not connected any social media profiles. Please connect Meta accounts first.");
+    if (socialConns.length === 0) {
+        throw new Error("This client has not connected any social media profiles. Please connect accounts first.");
     }
 
     const targetPlatforms = Array.isArray(platforms) ? platforms : (platform ? [platform] : []);
@@ -98,18 +99,10 @@ export const schedulePost = async (data, loggedInUser) => {
         throw new Error("At least one platform must be selected");
     }
 
+    const connectedPlatforms = socialConns.map(c => c.platform.toLowerCase());
     for (const p of targetPlatforms) {
-        const upperPlatform = p.toUpperCase();
-        if (upperPlatform === "FACEBOOK") {
-            if (!metaConn.facebookPageId || !metaConn.facebookPageAccessToken) {
-                throw new Error("Client Facebook page is not connected or unauthorized");
-            }
-        } else if (upperPlatform === "INSTAGRAM") {
-            if (!metaConn.instagramBusinessId) {
-                throw new Error("Client Instagram Business profile is not connected");
-            }
-        } else {
-            throw new Error(`Unsupported platform: ${p}`);
+        if (!connectedPlatforms.includes(p.toLowerCase())) {
+            throw new Error(`Platform ${p} is not connected for this client`);
         }
     }
 
@@ -469,17 +462,20 @@ export const getSocialStatus = async (clientId, companyId) => {
         throw new Error("Client not found");
     }
 
-    const metaConn = await prisma.metaConnection.findUnique({
+    const socialConns = await prisma.socialConnection.findMany({
         where: { clientId },
     });
 
+    const facebookConn = socialConns.find(c => c.platform.toLowerCase() === "facebook");
+    const instagramConn = socialConns.find(c => c.platform.toLowerCase() === "instagram");
+
     return {
         clientName: client.companyName || client.brandName || "Client",
-        connected: !!metaConn,
-        facebookConnected: !!(metaConn && metaConn.facebookPageId && metaConn.facebookPageAccessToken),
-        instagramConnected: !!(metaConn && metaConn.instagramBusinessId),
-        facebookPageName: metaConn ? metaConn.facebookPageName : null,
-        instagramUsername: metaConn ? metaConn.instagramUsername : null,
+        connected: socialConns.length > 0,
+        facebookConnected: !!facebookConn,
+        instagramConnected: !!instagramConn,
+        facebookPageName: facebookConn ? facebookConn.profileName : null,
+        instagramUsername: instagramConn ? instagramConn.profileName : null,
     };
 };
 
@@ -492,11 +488,7 @@ export const deletePublishingJob = async (id, companyId, loggedInUser) => {
         include: {
             task: true,
             shoot: true,
-            client: {
-                include: {
-                    metaConnection: true,
-                },
-            },
+            client: true,
         },
     });
 
@@ -508,23 +500,14 @@ export const deletePublishingJob = async (id, companyId, loggedInUser) => {
         throw new Error("Access denied: You do not own this publishing job");
     }
 
-    // If already published and on FACEBOOK, try to delete it from Meta
-    if (job.status === "PUBLISHED" && job.platform.toUpperCase() === "FACEBOOK" && job.externalPostId) {
+    // If already published and we have an external post ID, delete from PostProxy (which deletes from the platform)
+    if (job.status === "PUBLISHED" && job.externalPostId) {
         try {
-            const metaConn = job.client.metaConnection;
-            if (metaConn && metaConn.facebookPageAccessToken) {
-                console.log(`Attempting to delete Facebook post ${job.externalPostId} via Graph API`);
-                const deleteUrl = `https://graph.facebook.com/v19.0/${job.externalPostId}?access_token=${metaConn.facebookPageAccessToken}`;
-                const res = await fetch(deleteUrl, { method: "DELETE" });
-                const resData = await res.json();
-                if (!res.ok) {
-                    console.error("Facebook delete failed:", resData);
-                } else {
-                    console.log(`Successfully deleted Facebook post ${job.externalPostId}`);
-                }
-            }
+            console.log(`Attempting to delete post ${job.externalPostId} via PostProxy API`);
+            await deletePostFromProxy(job.externalPostId, true);
+            console.log(`Successfully requested deletion for post ${job.externalPostId} on platform`);
         } catch (err) {
-            console.error("Error attempting to delete Facebook post:", err);
+            console.error("Error attempting to delete post via PostProxy:", err);
         }
     }
 

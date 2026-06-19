@@ -14,46 +14,43 @@ export const getSocialConnections = async (req, res) => {
             return res.status(403).json({ success: false, message: "Only clients can access social connection metadata" });
         }
 
-        const metaConn = await prisma.metaConnection.findUnique({
+        const connections = await prisma.socialConnection.findMany({
             where: { clientId: clientId }
         });
 
-        if (!metaConn) {
-            return res.status(200).json({
-                success: true,
-                data: {
-                    instagram: {
-                        connected: false,
-                        username: "",
-                        businessId: "",
-                        connectedAt: null,
-                    },
-                    facebook: {
-                        connected: false,
-                        pageName: "",
-                        pageId: "",
-                        connectedAt: null,
-                    }
-                }
-            });
+        // Initialize with default platforms for UI safety
+        const data = {
+            instagram: {
+                connected: false,
+                username: "",
+                businessId: "",
+                connectedAt: null,
+            },
+            facebook: {
+                connected: false,
+                pageName: "",
+                pageId: "",
+                connectedAt: null,
+            }
+        };
+
+        // Populate connected platforms dynamically
+        for (const conn of connections) {
+            const platform = conn.platform.toLowerCase();
+            data[platform] = {
+                connected: true,
+                username: conn.profileName || "",
+                businessId: conn.postproxyProfileId,
+                connectedAt: conn.connectedAt.toISOString(),
+                // Extra fields for compatibility between fb/instagram card layouts
+                pageName: conn.profileName || "",
+                pageId: conn.postproxyProfileId,
+            };
         }
 
         return res.status(200).json({
             success: true,
-            data: {
-                instagram: {
-                    connected: !!metaConn.instagramBusinessId,
-                    username: metaConn.instagramUsername || "",
-                    businessId: metaConn.instagramBusinessId || "",
-                    connectedAt: metaConn.connectedAt.toISOString(),
-                },
-                facebook: {
-                    connected: !!metaConn.facebookPageId,
-                    pageName: metaConn.facebookPageName || "",
-                    pageId: metaConn.facebookPageId || "",
-                    connectedAt: metaConn.connectedAt.toISOString(),
-                }
-            }
+            data
         });
     } catch (error) {
         console.error("Error retrieving social connections:", error);
@@ -63,14 +60,52 @@ export const getSocialConnections = async (req, res) => {
 
 // DELETE /api/social/connections/facebook
 export const disconnectFacebook = async (req, res) => {
-    return res.status(200).json({
-        message: "Disconnect functionality not implemented."
-    });
+    try {
+        const clientId = req.user.id;
+        await prisma.socialConnection.deleteMany({
+            where: {
+                clientId,
+                platform: "facebook"
+            }
+        });
+        return res.status(200).json({ success: true, message: "Disconnected Facebook successfully" });
+    } catch (error) {
+        console.error("Error disconnecting Facebook:", error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
 };
 
 // DELETE /api/social/connections/instagram
 export const disconnectInstagram = async (req, res) => {
-    return res.status(200).json({
-        message: "Disconnect functionality not implemented."
-    });
+    try {
+        const clientId = req.user.id;
+        await prisma.socialConnection.deleteMany({
+            where: {
+                clientId,
+                platform: "instagram"
+            }
+        });
+        return res.status(200).json({ success: true, message: "Disconnected Instagram successfully" });
+    } catch (error) {
+        console.error("Error disconnecting Instagram:", error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+// DELETE /api/social/connections/:platform
+export const disconnectPlatform = async (req, res) => {
+    try {
+        const clientId = req.user.id;
+        const { platform } = req.params;
+        await prisma.socialConnection.deleteMany({
+            where: {
+                clientId,
+                platform: platform.toLowerCase()
+            }
+        });
+        return res.status(200).json({ success: true, message: `Disconnected ${platform} successfully` });
+    } catch (error) {
+        console.error(`Error disconnecting platform ${platform}:`, error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
 };

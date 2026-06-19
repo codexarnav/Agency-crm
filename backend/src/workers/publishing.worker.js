@@ -1,7 +1,7 @@
 import { Worker } from "bullmq";
 import prisma from "../config/prisma.js";
 import { redisConnection } from "../config/redisConnection.js";
-import { publishToFacebook, publishToInstagram } from "../services/meta.service.js";
+import { publishPost } from "../services/postproxy.service.js";
 import { createNotification } from "../services/notifications.service.js";
 
 const worker = new Worker(
@@ -16,11 +16,7 @@ const worker = new Worker(
       include: {
         task: true,
         shoot: true,
-        client: {
-          include: {
-            metaConnection: true,
-          },
-        },
+        client: true,
       },
     });
 
@@ -53,9 +49,14 @@ const worker = new Worker(
     }
 
     try {
-      const connectionData = pubJob.client.metaConnection;
-      if (!connectionData) {
-        throw new Error(`Client "${pubJob.client.companyName}" has no connected Meta profiles`);
+      const socialConn = await prisma.socialConnection.findFirst({
+        where: {
+          clientId: pubJob.clientId,
+          platform: pubJob.platform.toLowerCase()
+        }
+      });
+      if (!socialConn) {
+        throw new Error(`Client "${pubJob.client.companyName}" has no connected profile for platform "${pubJob.platform}"`);
       }
 
       // Check the media link
@@ -71,15 +72,14 @@ const worker = new Worker(
       const caption = pubJob.caption || (pubJob.task ? pubJob.task.title : (pubJob.shoot ? pubJob.shoot.title : ""));
 
       let externalPostId = null;
-      const platformName = pubJob.platform.toUpperCase();
 
-      if (platformName === "FACEBOOK") {
-        externalPostId = await publishToFacebook(connectionData, caption, imageUrl);
-      } else if (platformName === "INSTAGRAM") {
-        externalPostId = await publishToInstagram(connectionData, caption, imageUrl);
-      } else {
-        throw new Error(`Platform "${pubJob.platform}" is not supported for automated publishing yet`);
-      }
+      console.log(`Publishing to PostProxy using profile ID: ${socialConn.postproxyProfileId} for platform ${pubJob.platform}`);
+      const result = await publishPost(
+        [socialConn.postproxyProfileId],
+        caption,
+        imageUrl ? [imageUrl] : []
+      );
+      externalPostId = result.id;
 
       // 3. Success Path
       await prisma.publishingJob.update({

@@ -1,14 +1,20 @@
 import { useState, useEffect } from "react";
 import { useApp } from "../shared/AppContext";
-import { getSocialConnections, getToken } from "../services/api";
-import { SvgIcon, Btn } from "../shared/components";
+import { getSocialConnections, getToken, disconnectPlatform } from "../services/api";
+import { Btn } from "../shared/components";
+
+const SUPPORTED_PLATFORMS = [
+  { key: "instagram", name: "Instagram", desc: "Feed, Stories & Reels scheduling", icon: "I", color: "#E1306C", bg: "rgba(225, 48, 108, 0.1)" },
+  { key: "facebook", name: "Facebook Page", desc: "Page post scheduling & tracking", icon: "F", color: "#1877F2", bg: "rgba(24, 119, 242, 0.1)" },
+  { key: "linkedin", name: "LinkedIn", desc: "Share updates, articles & media", icon: "L", color: "#0A66C2", bg: "rgba(10, 102, 194, 0.1)" },
+  { key: "youtube", name: "YouTube Channel", desc: "Publish videos & Shorts", icon: "Y", color: "#FF0000", bg: "rgba(255, 0, 0, 0.1)" },
+  { key: "twitter", name: "X (Twitter)", desc: "Share tweets, threads & media", icon: "X", color: "#1DA1F2", bg: "rgba(29, 161, 242, 0.1)" },
+  { key: "tiktok", name: "TikTok", desc: "Publish short-form videos & music", icon: "T", color: "#010101", bg: "rgba(1, 1, 1, 0.1)" }
+];
 
 function ClientSocialOnboardingPage() {
   const { showToast } = useApp();
-  const [connections, setConnections] = useState({
-    instagram: { connected: false, username: "", businessId: "", connectedAt: null },
-    facebook: { connected: false, pageName: "", pageId: "", connectedAt: null },
-  });
+  const [connections, setConnections] = useState({});
   const [loading, setLoading] = useState(true);
 
   const fetchConnections = async () => {
@@ -45,7 +51,7 @@ function ClientSocialOnboardingPage() {
     }
   }, []);
 
-  const handleConnect = () => {
+  const handleConnect = (platform) => {
     let backendHost = "";
     const apiEnv = import.meta.env.VITE_API_URL;
     if (apiEnv) {
@@ -60,19 +66,32 @@ function ClientSocialOnboardingPage() {
       return;
     }
 
-    // Redirect to backend OAuth initiator path with token
-    window.location.href = `${backendHost}/auth/meta?token=${token}`;
+    // Redirect to backend PostProxy OAuth initiator path with token and platform
+    window.location.href = `${backendHost}/auth/postproxy/connect?token=${token}&platform=${platform}`;
   };
 
-  const handlePlaceholderDisconnect = (platform) => {
-    alert(`${platform} disconnect functionality not implemented (placeholder).`);
+  const handleDisconnect = async (platformKey, platformName) => {
+    if (!window.confirm(`Are you sure you want to disconnect ${platformName}?`)) return;
+    try {
+      setLoading(true);
+      const res = await disconnectPlatform(platformKey);
+      if (res.success) {
+        showToast(`${platformName} disconnected successfully!`, "success");
+        fetchConnections();
+      }
+    } catch (err) {
+      console.error(err);
+      showToast(`Failed to disconnect ${platformName}.`, "danger");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="fade-in" style={{ paddingBottom: 60 }}>
       <div className="page-header">
         <h1 className="page-title">Social Account Connections</h1>
-        <p className="page-subtitle">Link your Facebook Pages and Instagram Business Accounts to enable automated publishing from CRM.</p>
+        <p className="page-subtitle">Link your social media channels to enable automated publishing and campaign queue scheduling.</p>
       </div>
 
       {loading ? (
@@ -81,161 +100,75 @@ function ClientSocialOnboardingPage() {
           Loading connection status...
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 24, maxWidth: 800 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 24, maxWidth: 900 }}>
           {/* Channels Grid */}
           <div className="grid-2">
-            
-            {/* Instagram Card */}
-            <div className="card" style={{ padding: 28, display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 280, position: "relative", overflow: "hidden" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-                  <div style={{ width: 48, height: 48, borderRadius: 12, background: "rgba(225, 48, 108, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, color: "#E1306C", fontWeight: 700 }}>
-                    I
+            {SUPPORTED_PLATFORMS.map((platform) => {
+              const conn = connections[platform.key] || { connected: false, username: "", connectedAt: null };
+              return (
+                <div key={platform.key} className="card" style={{ padding: 28, display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 280, position: "relative", overflow: "hidden" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+                      <div style={{ width: 48, height: 48, borderRadius: 12, background: platform.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, color: platform.color, fontWeight: 700 }}>
+                        {platform.icon}
+                      </div>
+                      <div>
+                        <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: "var(--dark)", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>{platform.name}</h3>
+                        <p style={{ fontSize: 12, color: "var(--muted)", margin: "4px 0 0" }}>{platform.desc}</p>
+                      </div>
+                    </div>
+                    
+                    {/* Status Badge */}
+                    <span style={{ 
+                      fontSize: 11, 
+                      fontWeight: 700, 
+                      padding: "4px 10px", 
+                      borderRadius: 99, 
+                      background: conn.connected ? "var(--success)15" : "var(--border)", 
+                      color: conn.connected ? "var(--success)" : "var(--muted)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 5
+                    }}>
+                      <span style={{ width: 6, height: 6, borderRadius: "50%", background: conn.connected ? "var(--success)" : "var(--muted)" }} />
+                      {conn.connected ? "Connected" : "Not Connected"}
+                    </span>
                   </div>
-                  <div>
-                    <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: "var(--dark)", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Instagram</h3>
-                    <p style={{ fontSize: 12, color: "var(--muted)", margin: "4px 0 0" }}>Feed, Stories & Reels scheduling</p>
+
+                  {/* Connected details */}
+                  <div style={{ margin: "24px 0" }}>
+                    {conn.connected ? (
+                      <div style={{ background: "#F9FAFB", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, paddingBottom: 6, borderBottom: "1px dashed var(--border)" }}>
+                          <span style={{ color: "var(--muted)", fontWeight: 500 }}>Profile:</span>
+                          <span style={{ fontWeight: 700, color: "var(--dark)" }}>@{conn.username}</span>
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, paddingTop: 6 }}>
+                          <span style={{ color: "var(--muted)", fontWeight: 500 }}>Linked At:</span>
+                          <span style={{ fontWeight: 600, color: "var(--dark)" }}>{new Date(conn.connectedAt).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <p style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5, margin: 0 }}>
+                        Connect your {platform.name} account to authorize and schedule direct publishing of images and videos.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Actions */}
+                  <div style={{ display: "flex", gap: 10, marginTop: "auto" }}>
+                    {conn.connected ? (
+                      <>
+                        <Btn variant="outline" size="sm" onClick={() => handleConnect(platform.key)}>Reconnect</Btn>
+                        <Btn variant="danger" size="sm" onClick={() => handleDisconnect(platform.key, platform.name)}>Disconnect</Btn>
+                      </>
+                    ) : (
+                      <Btn variant="primary" size="sm" onClick={() => handleConnect(platform.key)}>Connect Account</Btn>
+                    )}
                   </div>
                 </div>
-                
-                {/* Status Badge */}
-                <span style={{ 
-                  fontSize: 11, 
-                  fontWeight: 700, 
-                  padding: "4px 10px", 
-                  borderRadius: 99, 
-                  background: connections.instagram.connected ? "var(--success)15" : "var(--border)", 
-                  color: connections.instagram.connected ? "var(--success)" : "var(--muted)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 5
-                }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: connections.instagram.connected ? "var(--success)" : "var(--muted)" }} />
-                  {connections.instagram.connected ? "Connected" : "Not Connected"}
-                </span>
-              </div>
-
-              {/* Connected details */}
-              <div style={{ margin: "24px 0" }}>
-                {connections.instagram.connected ? (
-                  <div style={{ background: "#F9FAFB", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, paddingBottom: 6, borderBottom: "1px dashed var(--border)" }}>
-                      <span style={{ color: "var(--muted)", fontWeight: 500 }}>Username:</span>
-                      <span style={{ fontWeight: 700, color: "var(--dark)" }}>@{connections.instagram.username}</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, paddingTop: 6 }}>
-                      <span style={{ color: "var(--muted)", fontWeight: 500 }}>Linked At:</span>
-                      <span style={{ fontWeight: 600, color: "var(--dark)" }}>{new Date(connections.instagram.connectedAt).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                ) : (
-                  <p style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5, margin: 0 }}>
-                    Connect your Instagram Business account to authorize and schedule direct publishing of images and videos.
-                  </p>
-                )}
-              </div>
-
-              {/* Actions */}
-              <div style={{ display: "flex", gap: 10, marginTop: "auto" }}>
-                {connections.instagram.connected ? (
-                  <>
-                    <Btn variant="outline" size="sm" onClick={handleConnect}>Reconnect</Btn>
-                    <Btn variant="danger" size="sm" onClick={() => handlePlaceholderDisconnect("Instagram")}>Disconnect</Btn>
-                  </>
-                ) : (
-                  <Btn variant="primary" size="sm" onClick={handleConnect}>Connect Account</Btn>
-                )}
-              </div>
-            </div>
-
-            {/* Facebook Card */}
-            <div className="card" style={{ padding: 28, display: "flex", flexDirection: "column", justifyContent: "space-between", minHeight: 280, position: "relative", overflow: "hidden" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-                  <div style={{ width: 48, height: 48, borderRadius: 12, background: "rgba(24, 119, 242, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, color: "#1877F2", fontWeight: 700 }}>
-                    F
-                  </div>
-                  <div>
-                    <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: "var(--dark)", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>Facebook Page</h3>
-                    <p style={{ fontSize: 12, color: "var(--muted)", margin: "4px 0 0" }}>Page post scheduling & tracking</p>
-                  </div>
-                </div>
-                
-                {/* Status Badge */}
-                <span style={{ 
-                  fontSize: 11, 
-                  fontWeight: 700, 
-                  padding: "4px 10px", 
-                  borderRadius: 99, 
-                  background: connections.facebook.connected ? "var(--success)15" : "var(--border)", 
-                  color: connections.facebook.connected ? "var(--success)" : "var(--muted)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 5
-                }}>
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: connections.facebook.connected ? "var(--success)" : "var(--muted)" }} />
-                  {connections.facebook.connected ? "Connected" : "Not Connected"}
-                </span>
-              </div>
-
-              {/* Connected details */}
-              <div style={{ margin: "24px 0" }}>
-                {connections.facebook.connected ? (
-                  <div style={{ background: "#F9FAFB", padding: 14, borderRadius: 8, border: "1px solid var(--border)" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, paddingBottom: 6, borderBottom: "1px dashed var(--border)" }}>
-                      <span style={{ color: "var(--muted)", fontWeight: 500 }}>Page Name:</span>
-                      <span style={{ fontWeight: 700, color: "var(--dark)" }}>{connections.facebook.pageName}</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12.5, paddingTop: 6 }}>
-                      <span style={{ color: "var(--muted)", fontWeight: 500 }}>Linked At:</span>
-                      <span style={{ fontWeight: 600, color: "var(--dark)" }}>{new Date(connections.facebook.connectedAt).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                ) : (
-                  <p style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5, margin: 0 }}>
-                    Connect your Facebook Page to schedule and publish image updates, links, and updates.
-                  </p>
-                )}
-              </div>
-
-              {/* Actions */}
-              <div style={{ display: "flex", gap: 10, marginTop: "auto" }}>
-                {connections.facebook.connected ? (
-                  <>
-                    <Btn variant="outline" size="sm" onClick={handleConnect}>Reconnect</Btn>
-                    <Btn variant="danger" size="sm" onClick={() => handlePlaceholderDisconnect("Facebook")}>Disconnect</Btn>
-                  </>
-                ) : (
-                  <Btn variant="primary" size="sm" onClick={handleConnect}>Connect Account</Btn>
-                )}
-              </div>
-            </div>
-
-          </div>
-
-          {/* Placeholders for Future Channels (LinkedIn, TikTok, X, YouTube) */}
-          <div className="card" style={{ padding: 24 }}>
-            <h4 style={{ fontSize: 14, fontWeight: 700, margin: "0 0 16px", color: "var(--dark)", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-              Upcoming Social Integrations
-            </h4>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 14 }}>
-              {[
-                { name: "LinkedIn", icon: "L", color: "#0A66C2" },
-                { name: "TikTok", icon: "T", color: "#010101" },
-                { name: "X (Twitter)", icon: "X", color: "#1DA1F2" },
-                { name: "YouTube", icon: "Y", color: "#FF0000" }
-              ].map(item => (
-                <div key={item.name} style={{ border: "1px dashed var(--border)", borderRadius: 10, padding: 14, textAlign: "center", background: "#FAFBFB" }}>
-                  <div style={{ width: 32, height: 32, borderRadius: "50%", background: `${item.color}10`, color: item.color, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, margin: "0 auto 8px" }}>
-                    {item.icon}
-                  </div>
-                  <div style={{ fontSize: 11.5, fontWeight: 700, color: "var(--dark)" }}>{item.name}</div>
-                  <span style={{ fontSize: 9.5, fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", display: "inline-block", marginTop: 4 }}>
-                    Planned
-                  </span>
-                </div>
-              ))}
-            </div>
+              );
+            })}
           </div>
         </div>
       )}

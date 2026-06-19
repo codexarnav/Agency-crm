@@ -276,6 +276,8 @@ model Client {
   reports        Report[]
   asset          Asset?
   metaConnection MetaConnection?
+  postproxyGroupId   String?
+  socialConnections  SocialConnection[]
   shoots         Shoot[]
   publishingJobs PublishingJob[]
 
@@ -685,4 +687,18 @@ model MetaConnection {
   instagramUsername       String?
   connectedAt             DateTime @default(now())
   updatedAt               DateTime @updatedAt
+}
+
+model SocialConnection {
+  id                  String   @id @default(uuid())
+  clientId            String
+  client              Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  platform            String                 // "instagram", "facebook", "youtube", etc.
+  postproxyProfileId  String                 // PostProxy's profile identifier
+  profileName         String?                // Display name (e.g., "@brandname")
+  profileGroupId      String                 // PostProxy profile group ID
+  connectedAt         DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([clientId, platform])             // One connection per platform per client
 }

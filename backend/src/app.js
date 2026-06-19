@@ -20,6 +20,7 @@ import shootRoutes from "./routes/shoot.routes.js";
 import publishingRoutes from "./routes/publishing.routes.js";
 import settingsRoutes from "./routes/settings.routes.js";
 import authMetaRoutes from "./routes/authMeta.routes.js";
+import authPostProxyRoutes from "./routes/authPostProxy.routes.js";
 import socialRoutes from "./routes/social.routes.js";
 
 import upload from "../middleware/upload.middleware.js";
@@ -37,6 +38,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 app.use("/auth", authMetaRoutes);
+app.use("/auth", authPostProxyRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/social", socialRoutes);
 app.use("/api/users", userRoutes);

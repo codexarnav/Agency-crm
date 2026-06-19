@@ -459,3 +459,7 @@ export async function disconnectInstagram() {
   return request("DELETE", "/social/connections/instagram");
 }
 
+export async function disconnectPlatform(platform) {
+  return request("DELETE", `/social/connections/${platform.toLowerCase()}`);
+}
+
