@@ -24,7 +24,7 @@ const FIELD_ALIASES = {
   description: ["description", "caption", "content", "idea", "creative brief", "brief", "copy"],
   assignedTo: ["assigned to", "owner", "employee", "team", "assignee", "responsible"],
   priority: ["priority", "importance"],
-  deadline: ["deadline", "due date"],
+  deadline: ["deadline", "due date", "days remaining", "days left"],
   status: ["status", "approval", "approval status"]
 };
 
@@ -35,7 +35,7 @@ const PLANNER_FIELDS = [
   { value: "description", label: "Description" },
   { value: "priority", label: "Priority" },
   { value: "assignedTo", label: "Assigned To" },
-  { value: "deadline", label: "Deadline" },
+  { value: "deadline", label: "Days Remaining" },
   { value: "status", label: "Status" }
 ];
 
@@ -117,6 +117,101 @@ function parseSpreadsheetDate(val) {
 
   return null;
 }
+
+const calcDaysRemaining = (deadlineStr) => {
+  if (!deadlineStr) return { text: " - ", color: "#9CA3AF", fontWeight: "400" };
+  const deadlineDate = new Date(deadlineStr);
+  if (isNaN(deadlineDate.getTime())) return { text: deadlineStr, color: "#374151", fontWeight: "400" };
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  deadlineDate.setHours(0, 0, 0, 0);
+  
+  const diffTime = deadlineDate.getTime() - today.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (diffDays === 0) return { text: "Today", color: "#D97706", fontWeight: "600" };
+  if (diffDays === 1) return { text: "1 day remaining", color: "#D97706", fontWeight: "600" };
+  if (diffDays > 1) return { text: `${diffDays} days remaining`, color: "#059669", fontWeight: "600" };
+  return { text: `${Math.abs(diffDays)} days overdue`, color: "#DC2626", fontWeight: "600" };
+};
+
+const DateInputCell = ({ value, onChange }) => {
+  const [isFocused, setIsFocused] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
+
+  // Format YYYY-MM-DD to "Dth Month"
+  const getDisplayValue = (val) => {
+    if (!val) return "";
+    const parts = val.split("-");
+    if (parts.length === 3) {
+      const day = parseInt(parts[2], 10);
+      const monthIdx = parseInt(parts[1], 10) - 1;
+      const months = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+      ];
+      const monthName = months[monthIdx] || "";
+      
+      let suffix = "th";
+      if (day < 11 || day > 13) {
+        switch (day % 10) {
+          case 1: suffix = "st"; break;
+          case 2: suffix = "nd"; break;
+          case 3: suffix = "rd"; break;
+        }
+      }
+      return `${day}${suffix} ${monthName}`;
+    }
+    return val;
+  };
+
+  const showHighlight = isFocused || isHovered;
+
+  return (
+    <div 
+      style={{ position: "relative", width: "100%", minWidth: 125 }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <input
+        type={isFocused ? "date" : "text"}
+        value={isFocused ? value : getDisplayValue(value)}
+        onChange={onChange}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
+        placeholder="Select date"
+        style={{
+          width: "100%",
+          padding: "5px 24px 5px 6px",
+          border: `1.5px solid ${showHighlight ? "#FF6A00" : "transparent"}`,
+          borderRadius: 6,
+          fontSize: 12,
+          fontFamily: "'DM Sans',sans-serif",
+          background: showHighlight ? "#fff" : "transparent",
+          outline: "none",
+          boxSizing: "border-box"
+        }}
+      />
+      {!isFocused && (
+        <span 
+          style={{ 
+            position: "absolute", 
+            right: 8, 
+            top: "50%", 
+            transform: "translateY(-50%)", 
+            pointerEvents: "none", 
+            fontSize: 12,
+            color: "var(--muted)",
+            opacity: 0.6
+          }}
+        >
+          📅
+        </span>
+      )}
+    </div>
+  );
+};
 
 function MonthlyPlannerPage() {
   const { clients, employees, session, showToast, refreshTasks } = useApp();
@@ -364,6 +459,14 @@ function MonthlyPlannerPage() {
     if (bulkEmp) { const e = employees.find(x => x.id === bulkEmp); setRows(p => p.map(r => selected.has(r.id) ? { ...r, assignedEmployeeId: bulkEmp, assignedTo: e?.name || "", assignmentType: "manual" } : r)); showToast(`Bulk assigned ${selected.size} tasks.`, "success"); }
   };
 
+  const bulkDelete = () => {
+    if (window.confirm(`Are you sure you want to delete ${selected.size} selected items?`)) {
+      setRows(prev => prev.filter(r => !selected.has(r.id)));
+      setSelected(new Set());
+      showToast("Deleted selected items. Click 'Save Plan' to sync with database.", "info");
+    }
+  };
+
   useEffect(() => {
     const fetchPlan = async () => {
       if (!selClientId || !selMonth) return;
@@ -469,6 +572,7 @@ function MonthlyPlannerPage() {
             </select>
             <Btn variant="outline" size="sm" onClick={bulkApply}>Apply</Btn>
           </div>
+          <Btn variant="danger" size="sm" onClick={bulkDelete}>Delete Selected</Btn>
           <Btn variant="ghost" size="sm" onClick={() => setSelected(new Set())}>Clear</Btn>
         </div>
       )}
@@ -481,7 +585,7 @@ function MonthlyPlannerPage() {
               <tr style={{ background: "#F9FAFB" }}>
                 <th style={{ padding: "9px 10px", width: 36 }}><input type="checkbox" checked={rows.length > 0 && selected.size === rows.length} onChange={selAll} /></th>
                 <th style={{ padding: "9px 10px", fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: "2px solid var(--border)", textAlign: "left", whiteSpace: "nowrap" }}>#</th>
-                {["Platform", "Posting Date", "Day", "Content Type", "Description", "Priority", "Assigned To", "Deadline", "Status", ""].map(h => (
+                {["Platform", "Posting Date", "Day", "Content Type", "Description", "Priority", "Assigned To", "Days Remaining", "Status", ""].map(h => (
                   <th key={h} style={{ padding: "9px 10px", fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: "2px solid var(--border)", textAlign: "left", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
@@ -531,7 +635,7 @@ function MonthlyPlannerPage() {
                     )}
                   </td>
                   <td style={{ padding: "7px 8px" }}>
-                    <input type="date" value={row.postingDate} onChange={e => upd(row.id, "postingDate", e.target.value)} style={{ width: "100%", padding: "5px 6px", border: "1.5px solid transparent", borderRadius: 6, fontSize: 12, fontFamily: "'DM Sans',sans-serif", background: "transparent", outline: "none", minWidth: 110 }} onFocus={e => { e.target.style.borderColor = "#FF6A00"; e.target.style.background = "#fff"; }} onBlur={e => { e.target.style.borderColor = "transparent"; e.target.style.background = "transparent"; }} />
+                    <DateInputCell value={row.postingDate} onChange={e => upd(row.id, "postingDate", e.target.value)} />
                   </td>
                   <td style={{ padding: "7px 8px" }}><span style={{ fontSize: 12, color: "#374151", fontWeight: 500 }}>{row.day || " - "}</span></td>
                   <td style={{ padding: "7px 8px" }}>
@@ -588,13 +692,20 @@ function MonthlyPlannerPage() {
                       {row.assignmentType === "ai_assigned" && <span style={{ fontSize: 10, background: "#EDE9FE", color: "#5B21B6", padding: "1px 5px", borderRadius: 4, fontWeight: 700, flexShrink: 0 }}>AI</span>}
                     </div>
                   </td>
-                  <td style={{ padding: "7px 8px" }}><span style={{ fontSize: 11.5, color: row.internalDeadline ? "#374151" : "#9CA3AF" }}>{row.internalDeadline || " - "}</span></td>
+                  <td style={{ padding: "7px 8px" }}>
+                    {(() => {
+                      const info = calcDaysRemaining(row.internalDeadline);
+                      return (
+                        <span style={{ fontSize: 11.5, color: info.color, fontWeight: info.fontWeight }}>
+                          {info.text}
+                        </span>
+                      );
+                    })()}
+                  </td>
                   <td style={{ padding: "7px 8px" }}><ProdMBadge s={row.productionStatus} /></td>
                   <td style={{ padding: "7px 8px" }}>
                     <div style={{ display: "flex", gap: 3 }}>
-                      <button onClick={() => { setEditRowIdx(idx); setTaskModal(true); }} title="Edit" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", padding: "3px 5px", borderRadius: 5, fontSize: 13, lineHeight: 1 }}>edit</button>
                       <button onClick={() => { const dup = { ...row, id: `r_${Date.now()}` }; const n = [...rows]; n.splice(idx + 1, 0, dup); setRows(n); }} title="Duplicate" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", padding: "3px 5px", borderRadius: 5, fontSize: 14, lineHeight: 1 }}>+</button>
-                      <button onClick={() => { setRows(p => p.filter(r => r.id !== row.id)); setSelected(p => { const n = new Set(p); n.delete(row.id); return n; }); }} title="Delete" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--danger)", padding: "3px 5px", borderRadius: 5, fontSize: 14, lineHeight: 1 }}>x</button>
                     </div>
                   </td>
                 </tr>
