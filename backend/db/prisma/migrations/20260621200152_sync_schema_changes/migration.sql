@@ -1,45 +1,34 @@
 -- AlterEnum
--- This migration adds more than one value to an enum.
--- With PostgreSQL versions 11 and earlier, this is not possible
--- in a single migration. This can be worked around by creating
--- multiple migrations, each migration adding only one value to
--- the enum.
-
-
 ALTER TYPE "NotificationType" ADD VALUE IF NOT EXISTS 'POST_PUBLISHED';
 ALTER TYPE "NotificationType" ADD VALUE IF NOT EXISTS 'POST_PUBLISH_FAILED';
 
 -- AlterEnum
--- This migration adds more than one value to an enum.
--- With PostgreSQL versions 11 and earlier, this is not possible
--- in a single migration. This can be worked around by creating
--- multiple migrations, each migration adding only one value to
--- the enum.
-
-
 ALTER TYPE "PublishingStatus" ADD VALUE IF NOT EXISTS 'PUBLISHING';
 ALTER TYPE "PublishingStatus" ADD VALUE IF NOT EXISTS 'PUBLISHED';
 
--- AlterTable
-ALTER TABLE "Client" ADD COLUMN     "mustChangePassword" BOOLEAN NOT NULL DEFAULT true,
-ADD COLUMN     "postproxyGroupId" TEXT;
+-- AlterTable (Client)
+ALTER TABLE "Client" 
+ADD COLUMN IF NOT EXISTS "mustChangePassword" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN IF NOT EXISTS "postproxyGroupId" TEXT;
 
--- AlterTable
-ALTER TABLE "PublishingJob" ADD COLUMN     "attempts" INTEGER NOT NULL DEFAULT 0,
-ADD COLUMN     "lastError" TEXT,
-ADD COLUMN     "platforms" TEXT[] DEFAULT ARRAY[]::TEXT[],
-ADD COLUMN     "processedAt" TIMESTAMP(3);
+-- AlterTable (PublishingJob)
+ALTER TABLE "PublishingJob" 
+ADD COLUMN IF NOT EXISTS "attempts" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN IF NOT EXISTS "lastError" TEXT,
+ADD COLUMN IF NOT EXISTS "platforms" TEXT[] DEFAULT ARRAY[]::TEXT[],
+ADD COLUMN IF NOT EXISTS "processedAt" TIMESTAMP(3);
 
--- AlterTable
-ALTER TABLE "Task" ADD COLUMN     "metaPostIds" JSONB,
-ADD COLUMN     "postLink" TEXT,
-ADD COLUMN     "publishError" TEXT,
-ADD COLUMN     "publishedAt" TIMESTAMP(3),
-ADD COLUMN     "publishingAttempts" INTEGER NOT NULL DEFAULT 0,
-ADD COLUMN     "selectedPlatforms" TEXT[] DEFAULT ARRAY[]::TEXT[];
+-- AlterTable (Task)
+ALTER TABLE "Task" 
+ADD COLUMN IF NOT EXISTS "metaPostIds" JSONB,
+ADD COLUMN IF NOT EXISTS "postLink" TEXT,
+ADD COLUMN IF NOT EXISTS "publishError" TEXT,
+ADD COLUMN IF NOT EXISTS "publishedAt" TIMESTAMP(3),
+ADD COLUMN IF NOT EXISTS "publishingAttempts" INTEGER NOT NULL DEFAULT 0,
+ADD COLUMN IF NOT EXISTS "selectedPlatforms" TEXT[] DEFAULT ARRAY[]::TEXT[];
 
 -- CreateTable
-CREATE TABLE "MetaConnection" (
+CREATE TABLE IF NOT EXISTS "MetaConnection" (
     "id" TEXT NOT NULL,
     "clientId" TEXT NOT NULL,
     "facebookPageId" TEXT NOT NULL,
@@ -54,7 +43,7 @@ CREATE TABLE "MetaConnection" (
 );
 
 -- CreateTable
-CREATE TABLE "SocialConnection" (
+CREATE TABLE IF NOT EXISTS "SocialConnection" (
     "id" TEXT NOT NULL,
     "clientId" TEXT NOT NULL,
     "platform" TEXT NOT NULL,
@@ -68,13 +57,29 @@ CREATE TABLE "SocialConnection" (
 );
 
 -- CreateIndex
-CREATE UNIQUE INDEX "MetaConnection_clientId_key" ON "MetaConnection"("clientId");
+CREATE UNIQUE INDEX IF NOT EXISTS "MetaConnection_clientId_key" ON "MetaConnection"("clientId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "SocialConnection_clientId_platform_key" ON "SocialConnection"("clientId", "platform");
+CREATE UNIQUE INDEX IF NOT EXISTS "SocialConnection_clientId_platform_key" ON "SocialConnection"("clientId", "platform");
 
--- AddForeignKey
-ALTER TABLE "MetaConnection" ADD CONSTRAINT "MetaConnection_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Client"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+-- AddForeignKey (MetaConnection)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'MetaConnection_clientId_fkey' AND table_name = 'MetaConnection'
+    ) THEN
+        ALTER TABLE "MetaConnection" ADD CONSTRAINT "MetaConnection_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Client"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END $$;
 
--- AddForeignKey
-ALTER TABLE "SocialConnection" ADD CONSTRAINT "SocialConnection_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Client"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+-- AddForeignKey (SocialConnection)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE constraint_name = 'SocialConnection_clientId_fkey' AND table_name = 'SocialConnection'
+    ) THEN
+        ALTER TABLE "SocialConnection" ADD CONSTRAINT "SocialConnection_clientId_fkey" FOREIGN KEY ("clientId") REFERENCES "Client"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+    END IF;
+END $$;
