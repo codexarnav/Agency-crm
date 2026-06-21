@@ -316,6 +316,7 @@ model Task {
   priority Priority
 
   contentLink String?
+  postLink    String?
 
   dueDate DateTime?
 

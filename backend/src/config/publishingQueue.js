@@ -1,23 +1,26 @@
-import { Queue } from "bullmq";
-import { redisConnection } from "./redisConnection.js";
+import { PgBoss } from "pg-boss";
+import dotenv from "dotenv";
 
-export const publishingQueue = new Queue("publishing-jobs", {
-  connection: redisConnection,
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: {
-      type: "exponential",
-      delay: 5000,
-    },
-    removeOnComplete: true,
-    removeOnFail: false,
-  },
+dotenv.config();
+
+export const boss = new PgBoss({
+  connectionString: process.env.DATABASE_URL,
 });
 
+boss.on("error", (error) => console.error("pg-boss error:", error));
+
 export const addPublishingJob = async (publishingJobId, delayMs) => {
-  return await publishingQueue.add(
-    "publish",
+  const delayInSeconds = Math.max(0, Math.ceil(delayMs / 1000));
+  console.log(`[Queue] Queueing pg-boss job for ID: ${publishingJobId} with delay: ${delayInSeconds}s`);
+  return await boss.send(
+    "publishing-jobs",
     { publishingJobId },
-    { delay: Math.max(0, delayMs) }
+    {
+      startAfter: delayInSeconds,
+      singletonKey: String(publishingJobId),
+      retryLimit: 3,
+      retryDelay: 5, // 5 seconds between retries
+      retryBackoff: true,
+    }
   );
 };

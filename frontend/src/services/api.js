@@ -152,6 +152,15 @@ export async function savePlanner(payload) {
   return request("POST", "/planner/save", payload);
 }
 
+export async function importPlannerExcel(file, clientId, month, year) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("clientId", clientId);
+  formData.append("month", month);
+  formData.append("year", year);
+  return request("POST", "/planner/import-excel", formData);
+}
+
 // ── Announcements API ──────────────────────────────────────
 export async function getAnnouncements() {
   return request("GET", "/announcements");

@@ -1,14 +1,12 @@
-import { Worker } from "bullmq";
+import { boss } from "../config/publishingQueue.js";
 import prisma from "../config/prisma.js";
-import { redisConnection } from "../config/redisConnection.js";
 import { publishPost } from "../services/postproxy.service.js";
 import { createNotification } from "../services/notifications.service.js";
 
-const worker = new Worker(
-  "publishing-jobs",
-  async (job) => {
+export const startWorker = async () => {
+  await boss.work("publishing-jobs", { concurrency: 5 }, async (job) => {
     const { publishingJobId } = job.data;
-    console.log(`Processing BullMQ job: ${job.id} for PublishingJob ID: ${publishingJobId}`);
+    console.log(`Processing pg-boss job: ${job.id} for PublishingJob ID: ${publishingJobId}`);
 
     // 1. Fetch PublishingJob
     const pubJob = await prisma.publishingJob.findUnique({
@@ -47,6 +45,10 @@ const worker = new Worker(
         },
       });
     }
+
+    const attemptsMade = job.retrycount || 0;
+    const maxAttempts = job.retrylimit || 3;
+    const isLastAttempt = (attemptsMade + 1) >= maxAttempts;
 
     try {
       const socialConn = await prisma.socialConnection.findFirst({
@@ -88,7 +90,7 @@ const worker = new Worker(
           status: "PUBLISHED",
           externalPostId,
           publishedAt: new Date(),
-          attempts: job.attemptsMade + 1,
+          attempts: attemptsMade + 1,
           lastError: null,
         },
       });
@@ -99,7 +101,7 @@ const worker = new Worker(
         if (currentTask.metaPostIds && typeof currentTask.metaPostIds === "object" && !Array.isArray(currentTask.metaPostIds)) {
           metaPostIds = { ...currentTask.metaPostIds };
         }
-        metaPostIds[platformName.toLowerCase()] = externalPostId;
+        metaPostIds[pubJob.platform.toLowerCase()] = externalPostId; // Fixed typo platformName -> pubJob.platform
 
         await prisma.task.update({
           where: { id: pubJob.taskId },
@@ -140,17 +142,14 @@ const worker = new Worker(
     } catch (error) {
       console.error(`Error executing publishing job ${publishingJobId}:`, error);
 
-      const maxAttempts = job.opts.attempts || 3;
-      const isLastAttempt = (job.attemptsMade + 1) >= maxAttempts;
-
       // Update publishing job in DB with failure details
       await prisma.publishingJob.update({
         where: { id: publishingJobId },
         data: {
-          attempts: job.attemptsMade + 1,
+          attempts: attemptsMade + 1,
           lastError: error.message,
           failureReason: error.message,
-          status: isLastAttempt ? "FAILED" : "SCHEDULED", // Revert to SCHEDULED for BullMQ retry
+          status: isLastAttempt ? "FAILED" : "SCHEDULED", // Revert to SCHEDULED for retry
         },
       });
 
@@ -160,7 +159,7 @@ const worker = new Worker(
           data: {
             publishingStatus: isLastAttempt ? "FAILED" : "SCHEDULED",
             publishError: error.message,
-            publishingAttempts: job.attemptsMade + 1,
+            publishingAttempts: attemptsMade + 1,
           },
         });
       }
@@ -187,24 +186,10 @@ const worker = new Worker(
         }
       }
 
-      // Rethrow to trigger BullMQ retry mechanism
+      // Rethrow to trigger pg-boss retry mechanism
       throw error;
     }
-  },
-  {
-    connection: redisConnection,
-    concurrency: 5,
-  }
-);
+  });
 
-worker.on("completed", (job) => {
-  console.log(`BullMQ Job ${job.id} completed successfully.`);
-});
-
-worker.on("failed", (job, err) => {
-  console.error(`BullMQ Job ${job ? job.id : "unknown"} failed:`, err);
-});
-
-console.log("Publishing Automation Worker is running and listening for jobs...");
-
-export default worker;
+  console.log("Publishing Automation Worker is running and listening for jobs via PostgreSQL...");
+};

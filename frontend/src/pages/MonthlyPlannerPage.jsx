@@ -6,7 +6,7 @@ import { LSUtils } from "../shared/utils";
 import {
   SvgIcon, Btn, Avatar, StatusBadge, EmptyState, SearchBar, Modal,
 } from "../shared/components";
-import { getPlanner, savePlanner } from "../services/api";
+import { getPlanner, savePlanner, importPlannerExcel } from "../services/api";
 import {
   TaskDetailDrawer, TaskCreateModal,
   calcDayName, calcInternalDeadline, doAIAssign,
@@ -230,6 +230,9 @@ function MonthlyPlannerPage() {
   const [importHeaders, setImportHeaders] = useState([]);
   const [importRows, setImportRows] = useState([]);
   const [mappings, setMappings] = useState({});
+  const [aiPreviewModal, setAiPreviewModal] = useState(false);
+  const [aiImportRows, setAiImportRows] = useState([]);
+  const [aiWarnings, setAiWarnings] = useState([]);
 
   const client = clients.find(c => c.id === selClientId);
 
@@ -240,7 +243,7 @@ function MonthlyPlannerPage() {
     contentType: "Reel", contentDescription: "", captionCopy: "", priority: "medium",
     assignedEmployeeId: "", assignedTo: "", assignmentType: "manual",
     internalDeadline: "", productionStatus: "todo", approvalStatus: "pending",
-    publishingStatus: "not_scheduled", contentLink: "", managerNotes: "",
+    publishingStatus: "not_scheduled", contentLink: "", postLink: "", managerNotes: "",
     clientFeedback: "", revisionCount: 0, maxRevisions: 2,
     createdBy: session?.id || "user", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     ...o,
@@ -271,170 +274,84 @@ function MonthlyPlannerPage() {
     if (fileEl) fileEl.click();
   };
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const reader = new FileReader();
+    if (!selClientId) {
+      showToast("Select a client first.", "warning");
+      return;
+    }
+
+    const [year, month] = selMonth.split("-");
     setImporting(true);
-    reader.onload = (evt) => {
-      try {
-        const data = new Uint8Array(evt.target.result);
-        const workbook = XLSX.read(data, { type: "array" });
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
-        if (!jsonData || jsonData.length === 0) {
-          showToast("The uploaded file is empty.", "warning");
-          setImporting(false);
-          return;
-        }
 
-        let headerRowIdx = 0;
-        while (headerRowIdx < jsonData.length && 
-               (!jsonData[headerRowIdx] || 
-                jsonData[headerRowIdx].filter(x => x !== undefined && x !== null && String(x).trim() !== "").length === 0)) {
-          headerRowIdx++;
-        }
-
-        if (headerRowIdx >= jsonData.length) {
-          showToast("No valid columns or data found in the spreadsheet.", "warning");
-          setImporting(false);
-          return;
-        }
-
-        const headers = jsonData[headerRowIdx].map(h => h !== undefined && h !== null ? String(h).trim() : "");
-        const rawRows = jsonData.slice(headerRowIdx + 1);
-        const filteredRows = rawRows.filter(r => r && r.some(cell => cell !== undefined && cell !== null && String(cell).trim() !== ""));
-
-        if (filteredRows.length === 0) {
-          showToast("No data rows found below the header column.", "warning");
-          setImporting(false);
-          return;
-        }
-
-        const initialMapping = {};
-        headers.forEach(h => {
-          if (!h) return;
-          initialMapping[h] = findMatchedField(h) || "";
-        });
-
-        setImportHeaders(headers);
-        setImportRows(filteredRows);
-        setMappings(initialMapping);
-        setReviewModal(true);
-      } catch (err) {
-        showToast("Error reading spreadsheet: " + err.message, "danger");
-      } finally {
-        setImporting(false);
-        e.target.value = "";
+    try {
+      const res = await importPlannerExcel(file, selClientId, month, year);
+      if (res.success) {
+        setAiImportRows(res.rows || []);
+        setAiWarnings(res.warnings || []);
+        setAiPreviewModal(true);
+        showToast(`AI parsed ${res.rows?.length || 0} rows. Review them before importing!`, "success");
+      } else {
+        showToast(res.message || "Failed to parse spreadsheet.", "danger");
       }
-    };
-    reader.readAsArrayBuffer(file);
-  };
-
-  const updateMapping = (header, field) => {
-    setMappings(prev => ({ ...prev, [header]: field }));
+    } catch (err) {
+      showToast(err.message || "Error importing spreadsheet: " + err.message, "danger");
+    } finally {
+      setImporting(false);
+      e.target.value = "";
+    }
   };
 
   const confirmExcelImport = () => {
-    if (!importHeaders.length || !importRows.length) return;
-    
+    if (!aiImportRows.length) return;
+
     let addedCount = 0;
-    const newPlannerRows = importRows.map(rowArr => {
-      const r = {};
-      r.platform = client?.platforms?.[0] || "Instagram";
-      r.postingDate = "";
-      r.day = "";
-      r.contentType = "Reel";
-      r.contentDescription = "";
-      r.captionCopy = "";
-      r.priority = "medium";
-      r.assignedEmployeeId = "";
-      r.assignedTo = "";
-      r.assignmentType = "manual";
-      r.internalDeadline = "";
-      r.productionStatus = "todo";
-      r.approvalStatus = "pending";
-      r.publishingStatus = "not_scheduled";
-      r.contentLink = "";
-      r.managerNotes = "";
-      r.clientFeedback = "";
-      r.revisionCount = 0;
-      r.maxRevisions = 2;
-
-      importHeaders.forEach((h, colIdx) => {
-        const field = mappings[h];
-        if (!field) return;
-
-        let val = rowArr[colIdx];
-        if (val === undefined || val === null) {
-          val = "";
-        } else {
-          val = String(val).trim();
+    const newPlannerRows = aiImportRows.map(row => {
+      let assignedEmployeeId = "";
+      let assignedTo = row.assignedTo || "";
+      if (assignedTo) {
+        const emp = employees.find(e => {
+          const name = (e.name || "").toLowerCase();
+          const username = (e.username || "").toLowerCase();
+          const v = assignedTo.toLowerCase();
+          return name === v || username === v || name.includes(v) || v.includes(name);
+        });
+        if (emp) {
+          assignedEmployeeId = emp.id;
+          assignedTo = emp.name || emp.username || "";
         }
-
-        if (field === "platform") {
-          r.platform = val || r.platform;
-        } else if (field === "postingDate") {
-          const parsedDate = parseSpreadsheetDate(val);
-          if (parsedDate) {
-            r.postingDate = parsedDate;
-            r.day = calcDayName(parsedDate);
-          }
-        } else if (field === "contentType") {
-          r.contentType = val || r.contentType;
-        } else if (field === "description") {
-          r.contentDescription = val;
-        } else if (field === "priority") {
-          const normPrio = val.toLowerCase();
-          if (["high", "medium", "low", "urgent"].includes(normPrio)) {
-            r.priority = normPrio;
-          } else {
-            r.priority = "medium";
-          }
-        } else if (field === "assignedTo") {
-          const emp = employees.find(e => {
-            const name = (e.name || "").toLowerCase();
-            const username = (e.username || "").toLowerCase();
-            const v = val.toLowerCase();
-            return name === v || username === v || name.includes(v) || v.includes(name);
-          });
-          if (emp) {
-            r.assignedEmployeeId = emp.id;
-            r.assignedTo = emp.name || emp.username || "";
-          } else {
-            r.assignedTo = val;
-          }
-        } else if (field === "deadline") {
-          const parsedDeadline = parseSpreadsheetDate(val);
-          r.internalDeadline = parsedDeadline || val;
-        } else if (field === "status") {
-          const normVal = val.toLowerCase();
-          if (normVal.includes("todo") || normVal === "to do") r.productionStatus = "todo";
-          else if (normVal.includes("progress")) r.productionStatus = "in_progress";
-          else if (normVal.includes("review")) r.productionStatus = "ready_for_review";
-          else if (normVal.includes("done") || normVal.includes("complete")) r.productionStatus = "completed";
-        }
-      });
-
-      if (r.postingDate && !r.internalDeadline) {
-        r.internalDeadline = calcInternalDeadline(r.postingDate, r.contentType, r.priority);
       }
 
       addedCount++;
-      return makeRow(r);
+      return makeRow({
+        platform: row.platform || client?.platforms?.[0] || "Instagram",
+        postingDate: row.postingDate || "",
+        day: row.day || "",
+        contentType: row.contentType || "Reel",
+        contentDescription: row.description || "",
+        captionCopy: row.captionCopy || "",
+        contentLink: row.fileUrl || "",
+        postLink: row.postLink || "",
+        clientFeedback: row.feedback || "",
+        priority: ["low", "medium", "high", "urgent"].includes(row.priority?.toLowerCase()) ? row.priority.toLowerCase() : "medium",
+        assignedEmployeeId,
+        assignedTo,
+        productionStatus: ["todo", "in_progress", "ready_for_review", "changes_required", "blocked", "completed"].includes(row.status?.toLowerCase()) ? row.status.toLowerCase() : "todo",
+        confidence: row.confidence
+      });
     });
 
     setRows(prev => [...prev, ...newPlannerRows]);
-    setReviewModal(false);
+    setAiPreviewModal(false);
     showToast(`Imported ${addedCount} content items successfully. Review before saving!`, "success");
   };
 
   const handleDownloadTemplate = () => {
     const ws = XLSX.utils.aoa_to_sheet([
-      ["Platform", "Posting Date", "Day", "Content Type", "Description", "Priority", "Assigned To", "Deadline", "Status"],
-      ["Instagram", "2026-06-12", "Friday", "Reel", "Brand awareness Reel description", "High", "", "2026-06-11", "Todo"],
-      ["YouTube", "2026-06-15", "Monday", "Short", "Product showcase description", "Medium", "", "2026-06-14", "Todo"]
+      ["Date", "Day", "Content", "Type", "Content Description", "Platform", "Assigned To", "Priority", "Status", "File", "Thumbnail", "Feedback", "Post Link"],
+      ["2026-06-02", "Monday", "Brand awareness Reel", "Reel", "Hook: Why most brands fail at social media → cut to: 3 things we do differently", "Instagram", "", "High", "Todo", "", "", "", ""],
+      ["2026-06-04", "Wednesday", "Product showcase", "Carousel", "Swipe through our top 5 features — designed to convert", "Instagram", "", "Medium", "Todo", "", "", "", ""]
     ]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Template");
@@ -585,7 +502,7 @@ function MonthlyPlannerPage() {
               <tr style={{ background: "#F9FAFB" }}>
                 <th style={{ padding: "9px 10px", width: 36 }}><input type="checkbox" checked={rows.length > 0 && selected.size === rows.length} onChange={selAll} /></th>
                 <th style={{ padding: "9px 10px", fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: "2px solid var(--border)", textAlign: "left", whiteSpace: "nowrap" }}>#</th>
-                {["Platform", "Posting Date", "Day", "Content Type", "Description", "Priority", "Assigned To", "Days Remaining", "Status", ""].map(h => (
+                {["Platform", "Posting Date", "Day", "Content Type", "Description", "Priority", "Assigned To", "Days Remaining", "Status", "Post Link", ""].map(h => (
                   <th key={h} style={{ padding: "9px 10px", fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", borderBottom: "2px solid var(--border)", textAlign: "left", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
@@ -704,6 +621,39 @@ function MonthlyPlannerPage() {
                   </td>
                   <td style={{ padding: "7px 8px" }}><ProdMBadge s={row.productionStatus} /></td>
                   <td style={{ padding: "7px 8px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <input 
+                        value={row.postLink || ""} 
+                        onChange={e => upd(row.id, "postLink", e.target.value)} 
+                        placeholder="Live link..." 
+                        style={{ 
+                          width: "100%", 
+                          minWidth: 120, 
+                          padding: "5px 6px", 
+                          border: "1.5px solid transparent", 
+                          borderRadius: 6, 
+                          fontSize: 12, 
+                          fontFamily: "'DM Sans',sans-serif", 
+                          background: "transparent", 
+                          outline: "none" 
+                        }} 
+                        onFocus={e => { e.target.style.borderColor = "#FF6A00"; e.target.style.background = "#fff"; }} 
+                        onBlur={e => { e.target.style.borderColor = "transparent"; e.target.style.background = "transparent"; }} 
+                      />
+                      {row.postLink && (row.postLink.startsWith("http://") || row.postLink.startsWith("https://")) && (
+                        <a 
+                          href={row.postLink} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          style={{ fontSize: 13, textDecoration: "none", color: "#FF6A00" }} 
+                          title="Open Live Post"
+                        >
+                          🔗
+                        </a>
+                      )}
+                    </div>
+                  </td>
+                  <td style={{ padding: "7px 8px" }}>
                     <div style={{ display: "flex", gap: 3 }}>
                       <button onClick={() => { const dup = { ...row, id: `r_${Date.now()}` }; const n = [...rows]; n.splice(idx + 1, 0, dup); setRows(n); }} title="Duplicate" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", padding: "3px 5px", borderRadius: 5, fontSize: 14, lineHeight: 1 }}>+</button>
                     </div>
@@ -733,111 +683,118 @@ function MonthlyPlannerPage() {
         style={{ display: "none" }}
       />
 
-      {/* Excel Review & Mapping Modal */}
-      {reviewModal && (
+      {/* AI Preview Modal */}
+      {aiPreviewModal && (
         <Modal
-          open={reviewModal}
-          onClose={() => setReviewModal(false)}
-          title="Review Spreadsheet Import"
+          open={aiPreviewModal}
+          onClose={() => setAiPreviewModal(false)}
+          title="Review AI Spreadsheet Import"
           size="lg"
           footer={
             <div style={{ display: "flex", width: "100%", gap: 10, justifyContent: "flex-end" }}>
-              <Btn variant="outline" onClick={() => setReviewModal(false)}>Cancel</Btn>
-              <Btn onClick={confirmExcelImport}>Confirm Import</Btn>
+              <Btn variant="outline" onClick={() => setAiPreviewModal(false)}>Cancel</Btn>
+              <Btn onClick={confirmExcelImport}>Import Rows</Btn>
             </div>
           }
         >
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <p style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.5 }}>
-              We've analyzed your spreadsheet headers. Review the auto-detected mapping and adjust manually if needed.
+              Gemini has intelligently mapped the columns and extracted content calendar items. Review the preview below before adding them to your planner.
             </p>
 
-            {/* Match Cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-              <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#166534", textTransform: "uppercase" }}>Matched Columns</span>
-                <span style={{ fontSize: 22, fontWeight: 800, color: "#15803D" }}>
-                  {Object.entries(mappings).filter(([_, f]) => f !== "").length}
-                </span>
-              </div>
-              <div style={{ background: "#FEF3C7", border: "1px solid #FDE68A", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#92400E", textTransform: "uppercase" }}>Missing Planner Fields</span>
-                <span style={{ fontSize: 22, fontWeight: 800, color: "#D97706" }}>
-                  {PLANNER_FIELDS.filter(f => !Object.values(mappings).includes(f.value)).length}
-                </span>
-              </div>
-              <div style={{ background: "#F3F4F6", border: "1px solid #E5E7EB", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column", gap: 4 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#4B5563", textTransform: "uppercase" }}>Ignored / Extra</span>
-                <span style={{ fontSize: 22, fontWeight: 800, color: "#374151" }}>
-                  {Object.entries(mappings).filter(([_, f]) => f === "").length}
-                </span>
-              </div>
-            </div>
-
-            {/* Mappings Configurations */}
-            <div>
-              <h3 style={{ fontSize: 13, fontWeight: 700, color: "var(--dark)", marginBottom: 8 }}>Column Mapping Settings</h3>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: "240px", overflowY: "auto", border: "1px solid var(--border)", borderRadius: 8, padding: 10, background: "#FAFAFA" }}>
-                {importHeaders.map((h, idx) => {
-                  if (!h) return null;
-                  const currentVal = mappings[h] || "";
-                  return (
-                    <div key={h + "_" + idx} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "#fff", border: "1px solid var(--border)", borderRadius: 6 }}>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--dark)" }}>{h}</span>
-                        <span style={{ fontSize: 11, color: "var(--muted)" }}>Example: "{importRows[0]?.[idx] !== undefined ? String(importRows[0][idx]).slice(0, 30) : "-"}"</span>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <span style={{ fontSize: 11.5, color: "var(--muted)" }}>maps to</span>
-                        <select
-                          value={currentVal}
-                          onChange={e => updateMapping(h, e.target.value)}
-                          style={{ padding: "5px 10px", borderRadius: 6, border: "1.5px solid var(--border)", fontSize: 12.5, outline: "none", background: currentVal ? "var(--light-orange)" : "#fff", color: currentVal ? "var(--primary)" : "var(--dark)", fontWeight: currentVal ? 700 : 500 }}
-                        >
-                          <option value="">Do not map (Ignore)</option>
-                          {PLANNER_FIELDS.map(f => (
-                            <option key={f.value} value={f.value}>{f.label}</option>
-                          ))}
-                        </select>
-                      </div>
+            {/* Warnings Alert */}
+            {aiWarnings.length > 0 && (
+              <div style={{ background: "#FFFBEB", border: "1.5px solid #FDE68A", borderRadius: 8, padding: 12, display: "flex", flexDirection: "column", gap: 6 }}>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: "#B45309", textTransform: "uppercase", letterSpacing: "0.05em" }}>⚠️ Validation Warnings & Skipped Rows</span>
+                <div style={{ maxHeight: 90, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4 }}>
+                  {aiWarnings.map((w, idx) => (
+                    <div key={idx} style={{ fontSize: 12, color: "#D97706", fontWeight: 500 }}>
+                      • {w}
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
+            )}
+
+            {/* Preview Table */}
+            <div style={{ border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", maxHeight: 320, overflowY: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, textAlign: "left" }}>
+                <thead>
+                  <tr style={{ background: "#F9FAFB", borderBottom: "2px solid var(--border)" }}>
+                    <th style={{ padding: "8px 10px", fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase" }}>Date</th>
+                    <th style={{ padding: "8px 10px", fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase" }}>Day</th>
+                    <th style={{ padding: "8px 10px", fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase" }}>Platform</th>
+                    <th style={{ padding: "8px 10px", fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase" }}>Type</th>
+                    <th style={{ padding: "8px 10px", fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase" }}>Content</th>
+                    <th style={{ padding: "8px 10px", fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase" }}>Caption / Brief</th>
+                    <th style={{ padding: "8px 10px", fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase" }}>Assigned To</th>
+                    <th style={{ padding: "8px 10px", fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase" }}>Status</th>
+                    <th style={{ padding: "8px 10px", fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase" }}>Post Link</th>
+                    <th style={{ padding: "8px 10px", fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", textAlign: "center" }}>Confidence</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {aiImportRows.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} style={{ textAlign: "center", padding: "20px", color: "var(--muted)" }}>
+                        No valid content rows extracted.
+                      </td>
+                    </tr>
+                  ) : (
+                    aiImportRows.map((row, idx) => {
+                      const score = typeof row.confidence === "number" ? row.confidence : 0.95;
+                      const pct = Math.round(score * 100);
+                      let confBg = "#ECFDF5";
+                      let confColor = "#047857";
+                      if (score < 0.7) {
+                        confBg = "#FEF2F2";
+                        confColor = "#B91C1C";
+                      } else if (score < 0.9) {
+                        confBg = "#FFFBEB";
+                        confColor = "#B45309";
+                      }
+
+                      return (
+                        <tr key={idx} style={{ borderBottom: "1px solid var(--border)" }}>
+                          <td style={{ padding: "8px 10px", fontWeight: 600 }}>{row.postingDate || " - "}</td>
+                          <td style={{ padding: "8px 10px" }}>{row.day || " - "}</td>
+                          <td style={{ padding: "8px 10px" }}>
+                            <span style={{ fontSize: 11.5, color: "var(--primary)", fontWeight: 700 }}>{row.platform || "Instagram"}</span>
+                          </td>
+                          <td style={{ padding: "8px 10px" }}>
+                            <span style={{ background: "#EFF6FF", color: "#1D4ED8", padding: "2px 6px", borderRadius: 4, fontSize: 11, fontWeight: 600 }}>
+                              {row.contentType || "Reel"}
+                            </span>
+                          </td>
+                          <td style={{ padding: "8px 10px", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={row.description}>
+                            {row.description}
+                          </td>
+                          <td style={{ padding: "8px 10px", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: 11, color: "#6B7280" }} title={row.captionCopy}>
+                            {row.captionCopy || <span style={{ color: "#D1D5DB" }}>—</span>}
+                          </td>
+                          <td style={{ padding: "8px 10px" }}>{row.assignedTo || " - "}</td>
+                          <td style={{ padding: "8px 10px", textTransform: "capitalize" }}>{row.status || "todo"}</td>
+                          <td style={{ padding: "8px 10px", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={row.postLink}>
+                            {row.postLink || <span style={{ color: "#D1D5DB" }}>—</span>}
+                          </td>
+                          <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                            <span style={{ background: confBg, color: confColor, padding: "2px 6px", borderRadius: 4, fontWeight: 700, fontSize: 11 }}>
+                              {pct}%
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
 
-            {/* List Matched Details */}
-            <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 6 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>Summary of Mapping Status</span>
-              <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: "100px", overflowY: "auto", fontSize: 12.5 }}>
-                {Object.entries(mappings).map(([h, field]) => {
-                  if (!field) return null;
-                  const fieldLabel = PLANNER_FIELDS.find(f => f.value === field)?.label;
-                  return (
-                    <div key={h} style={{ color: "#16A34A", display: "flex", alignItems: "center", gap: 6, fontWeight: 500 }}>
-                      <span>✓</span>
-                      <span><strong>{fieldLabel}</strong> ← matched from "{h}"</span>
-                    </div>
-                  );
-                })}
-                {PLANNER_FIELDS.filter(f => !Object.values(mappings).includes(f.value)).map(f => (
-                  <div key={f.value} style={{ color: "#D97706", display: "flex", alignItems: "center", gap: 6, fontWeight: 500 }}>
-                    <span>⚠</span>
-                    <span><strong>{f.label}</strong> not found (will be blank)</span>
-                  </div>
-                ))}
-                {Object.entries(mappings).filter(([_, f]) => f === "").map(([h]) => (
-                  <div key={h} style={{ color: "#4B5563", display: "flex", alignItems: "center", gap: 6, fontWeight: 500 }}>
-                    <span>•</span>
-                    <span>Additional column detected & ignored: "{h}"</span>
-                  </div>
-                ))}
-              </div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+              <span style={{ fontSize: 12, color: "var(--muted)" }}>
+                Total rows to import: <strong>{aiImportRows.length}</strong>
+              </span>
             </div>
-
-            <span style={{ fontSize: 11.5, color: "var(--muted)", textAlign: "right", marginTop: 4 }}>
-              Rows to import: <strong>{importRows.length}</strong>
-            </span>
           </div>
         </Modal>
       )}
