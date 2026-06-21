@@ -6,8 +6,8 @@
 -- the enum.
 
 
-ALTER TYPE "NotificationType" ADD VALUE 'POST_PUBLISHED';
-ALTER TYPE "NotificationType" ADD VALUE 'POST_PUBLISH_FAILED';
+ALTER TYPE "NotificationType" ADD VALUE IF NOT EXISTS 'POST_PUBLISHED';
+ALTER TYPE "NotificationType" ADD VALUE IF NOT EXISTS 'POST_PUBLISH_FAILED';
 
 -- AlterEnum
 -- This migration adds more than one value to an enum.
@@ -17,8 +17,8 @@ ALTER TYPE "NotificationType" ADD VALUE 'POST_PUBLISH_FAILED';
 -- the enum.
 
 
-ALTER TYPE "PublishingStatus" ADD VALUE 'PUBLISHING';
-ALTER TYPE "PublishingStatus" ADD VALUE 'PUBLISHED';
+ALTER TYPE "PublishingStatus" ADD VALUE IF NOT EXISTS 'PUBLISHING';
+ALTER TYPE "PublishingStatus" ADD VALUE IF NOT EXISTS 'PUBLISHED';
 
 -- AlterTable
 ALTER TABLE "Client" ADD COLUMN     "mustChangePassword" BOOLEAN NOT NULL DEFAULT true,
