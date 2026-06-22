@@ -149,9 +149,14 @@ function ClientSocialOnboardingPage() {
                         </div>
                       </div>
                     ) : (
-                      <p style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5, margin: 0 }}>
-                        Connect your {platform.name} account to authorize and schedule direct publishing of images and videos.
-                      </p>
+                      <div>
+                        <p style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.5, margin: 0 }}>
+                          Connect your {platform.name} account to authorize and schedule direct publishing of images and videos.
+                        </p>
+                        <p style={{ fontSize: 11.5, color: "var(--muted)", lineHeight: 1.4, margin: "8px 0 0", fontStyle: "italic" }}>
+                          💡 <strong>Tip:</strong> If you are automatically logged into the wrong account, try logging out of Facebook/Instagram first, or perform this connection in an <strong>Incognito window</strong>.
+                        </p>
+                      </div>
                     )}
                   </div>
 
