@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useApp } from "../shared/AppContext";
 import { getSocialConnections, getToken, disconnectPlatform } from "../services/api";
-import { Btn } from "../shared/components";
+import { Btn, Modal } from "../shared/components";
 
 const SUPPORTED_PLATFORMS = [
   { key: "instagram", name: "Instagram", desc: "Feed, Stories & Reels scheduling", icon: "I", color: "#E1306C", bg: "rgba(225, 48, 108, 0.1)" },
@@ -16,6 +16,8 @@ function ClientSocialOnboardingPage() {
   const { showToast } = useApp();
   const [connections, setConnections] = useState({});
   const [loading, setLoading] = useState(true);
+  const [guidePlatform, setGuidePlatform] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   const fetchConnections = async () => {
     try {
@@ -51,7 +53,10 @@ function ClientSocialOnboardingPage() {
     }
   }, []);
 
-  const handleConnect = (platform) => {
+  const handleConnect = (platformKey) => {
+    const platform = SUPPORTED_PLATFORMS.find(p => p.key === platformKey);
+    if (!platform) return;
+
     let backendHost = "";
     const apiEnv = import.meta.env.VITE_API_URL;
     if (apiEnv) {
@@ -66,8 +71,14 @@ function ClientSocialOnboardingPage() {
       return;
     }
 
-    // Redirect to backend PostProxy OAuth initiator path with token and platform
-    window.location.href = `${backendHost}/auth/postproxy/connect?token=${token}&platform=${platform}`;
+    const connectionUrl = `${backendHost}/auth/postproxy/connect?token=${token}&platform=${platformKey}`;
+
+    setGuidePlatform({
+      key: platformKey,
+      name: platform.name,
+      url: connectionUrl
+    });
+    setCopied(false);
   };
 
   const handleDisconnect = async (platformKey, platformName) => {
@@ -177,6 +188,98 @@ function ClientSocialOnboardingPage() {
           </div>
         </div>
       )}
+
+      {/* Pre-Connection Guide Modal */}
+      <Modal
+        open={!!guidePlatform}
+        onClose={() => setGuidePlatform(null)}
+        title={`Connect ${guidePlatform?.name || "Social Account"}`}
+        size="md"
+      >
+        <div style={{ padding: "4px 0" }}>
+          <p style={{ fontSize: 13.5, color: "var(--dark)", lineHeight: 1.5, margin: "0 0 16px" }}>
+            To connect your business/brand social media account, we highly recommend using an <strong>Incognito / Private Window</strong>. 
+            Otherwise, your browser may automatically link your personal account instead.
+          </p>
+
+          {/* Guide Steps */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, background: "#F3F4F6", padding: 16, borderRadius: 8, border: "1px solid var(--border)", marginBottom: 18 }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", background: "var(--primary)", color: "#fff", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>1</span>
+              <p style={{ fontSize: 13, color: "var(--dark)", margin: 0 }}>
+                Click <strong>"Copy Connection Link"</strong> below to copy the auth URL.
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", background: "var(--primary)", color: "#fff", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>2</span>
+              <p style={{ fontSize: 13, color: "var(--dark)", margin: 0 }}>
+                Open a new <strong>Incognito / Private Window</strong> in this browser.
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", background: "var(--primary)", color: "#fff", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>3</span>
+              <p style={{ fontSize: 13, color: "var(--dark)", margin: 0 }}>
+                Paste the copied URL in the address bar and log in manually with your business account.
+              </p>
+            </div>
+          </div>
+
+          {/* URL Display */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 20 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>Connection Link:</span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="text"
+                readOnly
+                value={guidePlatform?.url || ""}
+                style={{ flex: 1, padding: "8px 12px", background: "#F9FAFB", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5, color: "var(--muted)" }}
+                onClick={(e) => e.target.select()}
+              />
+              <Btn
+                variant={copied ? "success" : "outline"}
+                size="sm"
+                onClick={async () => {
+                  if (guidePlatform?.url) {
+                    try {
+                      await navigator.clipboard.writeText(guidePlatform.url);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    } catch (err) {
+                      console.error("Failed to copy text:", err);
+                      // Fallback
+                      const input = document.createElement("input");
+                      input.value = guidePlatform.url;
+                      document.body.appendChild(input);
+                      input.select();
+                      document.execCommand("copy");
+                      document.body.removeChild(input);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }
+                  }
+                }}
+                style={{ whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 6 }}
+              >
+                {copied ? "✓ Copied" : "Copy Link"}
+              </Btn>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+            <Btn variant="ghost" size="sm" onClick={() => setGuidePlatform(null)}>
+              Cancel
+            </Btn>
+            <Btn variant="primary" size="sm" onClick={() => {
+              if (guidePlatform?.url) {
+                window.location.href = guidePlatform.url;
+              }
+            }}>
+              Open Directly (Regular Window)
+            </Btn>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
