@@ -291,6 +291,7 @@ const css = `
 
   @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.65;} }
 
+  @media (max-width: 768px) {
     .sidebar.mobile-open { transform: translateX(0); }
     .mobile-menu-btn { display: flex; }
     .sidebar-overlay { display: block; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 190; }

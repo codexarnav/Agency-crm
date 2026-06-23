@@ -798,7 +798,7 @@ function ClientsPage() {
           <DataTable
             columns={[
               {
-                key: "name", label: "Client", render: (v, row) => {
+                key: "name", label: "Client", width: "35%", render: (v, row) => {
                   const today = new Date();
                   const rDate = row.renewalDate ? new Date(row.renewalDate) : null;
                   const days = rDate ? Math.ceil((rDate - today) / (1000 * 60 * 60 * 24)) : null;
@@ -817,17 +817,17 @@ function ClientsPage() {
                   );
                 }
               },
-              { key: "packageName", label: "Package", hideOnMobile: true, render: v => <span style={{ fontSize: 12.5 }}>{v || " - "}</span> },
+              { key: "packageName", label: "Package", width: "20%", hideOnMobile: true, render: v => <span style={{ fontSize: 12.5 }}>{v || " - "}</span> },
               {
-                key: "assignedAM", label: "Account Mgr", hideOnMobile: true, render: v => {
+                key: "assignedAM", label: "Account Mgr", width: "20%", hideOnMobile: true, render: v => {
                   const emp = employees.find(e => e.id === v);
                   return emp ? <div style={{ display: "flex", alignItems: "center", gap: 6 }}><Avatar name={emp.name || emp.username} size="sm" /><span style={{ fontSize: 12.5 }}>{(emp.name || emp.username || "").split(" ")[0]}</span></div> : <span style={{ fontSize: 12.5, color: "var(--muted)" }}> - </span>;
                 }
               },
-              { key: "status", label: "Status", render: v => { const m = clientStatusMeta(v); return <span className={`badge ${m.cls}`}><span className="dot" style={{ width: 6, height: 6, background: m.dot }} />{m.label}</span>; } },
+              { key: "status", label: "Status", width: "15%", render: v => { const m = clientStatusMeta(v); return <span className={`badge ${m.cls}`}><span className="dot" style={{ width: 6, height: 6, background: m.dot }} />{m.label}</span>; } },
               {
-                key: "id", label: "", render: (_, row) => (
-                  <div style={{ display: "flex", gap: 5 }}>
+                key: "id", label: "", width: "10%", render: (_, row) => (
+                  <div style={{ display: "flex", gap: 5, justifyContent: "flex-end" }}>
                     <button className="btn btn-ghost btn-icon btn-sm" title="View details" onClick={e => { e.stopPropagation(); setDrawerClient(row); }}>
                       <SvgIcon name="alert" size={14} color="var(--muted)" />
                     </button>

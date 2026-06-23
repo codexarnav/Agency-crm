@@ -75,7 +75,7 @@ function AgencyTaskOverviewPage() {
   const sortedDateKeys = Object.keys(groupedTasks).sort((a, b) => {
     if (a === "Unscheduled") return 1;
     if (b === "Unscheduled") return -1;
-    return new Date(a) - new Date(b);
+    return new Date(b) - new Date(a);
   });
 
   return (
