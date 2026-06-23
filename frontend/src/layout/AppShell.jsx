@@ -47,7 +47,7 @@ function AppShell({ session, logout, updateSession }) {
     if (window.location.pathname === "/client/settings/social") {
       return "settings_social";
     }
-    const role = session?.role;
+    const role = session?.role?.toLowerCase();
     if (role === "superadmin" || role === "manager") {
       return "users";
     }
@@ -149,7 +149,7 @@ function AppShell({ session, logout, updateSession }) {
   useEffect(() => {
     const shown = sessionStorage.getItem("welcome_shown");
     if (!shown) {
-      const m = ROLE_META[session?.role] || {};
+      const m = ROLE_META[session?.role?.toLowerCase()] || {};
       showToast(`Welcome back, ${session?.name?.split(" ")[0] || "User"}. You're signed in as ${m.label || "Guest"}.`, "success");
       sessionStorage.setItem("welcome_shown", "1");
     }
@@ -223,7 +223,7 @@ function AppShell({ session, logout, updateSession }) {
   };
 
   const renderPage = () => {
-    const role = session?.role || "employee";
+    const role = session?.role?.toLowerCase() || "employee";
 
     // Dashboard is role-specific
     if (page === "dashboard") {

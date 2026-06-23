@@ -5,7 +5,7 @@ import { SvgIcon, Avatar } from "../shared/components";
 
 function Sidebar({ activePage, setPage, mobileOpen, setMobileOpen }) {
   const { session, logout, tasks, notifications } = useApp();
-  const role = session?.role || "employee";
+  const role = session?.role?.toLowerCase() || "employee";
   const sections = NAV_CONFIG[role] || NAV_CONFIG.employee;
   const roleMeta = ROLE_META[role] || {};
 

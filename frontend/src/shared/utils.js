@@ -82,10 +82,22 @@ const LSUtils = {
 
     return entry;
   },
-  getCurrentSession: () => LSUtils.getData(LS_KEYS.SESSION),
-  setCurrentSession: (sessionData) => LSUtils.setData(LS_KEYS.SESSION, {
-    ...sessionData, loginAt: new Date().toISOString(),
-  }),
+  getCurrentSession: () => {
+    const session = LSUtils.getData(LS_KEYS.SESSION);
+    if (session && session.role) {
+      session.role = session.role.toLowerCase();
+    }
+    return session;
+  },
+  setCurrentSession: (sessionData) => {
+    const normalized = { ...sessionData };
+    if (normalized.role) {
+      normalized.role = normalized.role.toLowerCase();
+    }
+    return LSUtils.setData(LS_KEYS.SESSION, {
+      ...normalized, loginAt: new Date().toISOString(),
+    });
+  },
   logoutUser: () => {
     localStorage.removeItem(LS_KEYS.SESSION);
   },

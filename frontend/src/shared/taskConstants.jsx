@@ -698,7 +698,7 @@ function TaskDetailDrawer({ task, open, onClose, employees, onStatusUpdate }) {
   const update = async (changes, customMessage) => {
     try {
       let res;
-      if (session?.role === "employee") {
+      if (session?.role?.toLowerCase() === "employee") {
         res = await updateTaskStatus(task.id, changes);
       } else {
         res = await updateTask(task.id, changes);
@@ -798,7 +798,7 @@ function TaskDetailDrawer({ task, open, onClose, employees, onStatusUpdate }) {
           </div>
           
           {/* Manager Assignment (only for employee role) */}
-          {session?.role === "employee" && (
+          {session?.role?.toLowerCase() === "employee" && (
             <div style={{ marginBottom: 14 }}>
               <label style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 5, display: "block" }}>Assign Manager for Review *</label>
               <select 
@@ -922,7 +922,7 @@ function TaskDetailDrawer({ task, open, onClose, employees, onStatusUpdate }) {
                 size="sm" 
                 disabled={isUploading || !contentLink}
                 onClick={() => { 
-                  if (session?.role === "employee" && !selectedManagerId) {
+                  if (session?.role?.toLowerCase() === "employee" && !selectedManagerId) {
                     showToast("Please assign a manager for review.", "warning");
                     return;
                   }
