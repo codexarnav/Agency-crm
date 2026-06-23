@@ -279,6 +279,7 @@ export const NAV_CONFIG = {
       label: "My Work", items: [
         { id: "dashboard", label: "My Client Overview", iconName: "dashboard" },
         { id: "clients", label: "Assigned Clients", iconName: "handshake" },
+        { id: "users", label: "Team", iconName: "users" },
       ]
     },
     {
@@ -311,6 +312,7 @@ export const NAV_CONFIG = {
         { id: "tasks", label: "My Tasks", iconName: "checklist", badge: "4" },
         { id: "kanban", label: "Kanban Board", iconName: "kanban" },
         { id: "deadlines", label: "Deadlines", iconName: "clock" },
+        { id: "users", label: "Team", iconName: "users" },
       ]
     },
     {

@@ -110,25 +110,6 @@ function RoleLoginPage({ onLogin, onBack }) {
             <FormInput label="Username or Email" value={username} onChange={e => setUsername(e.target.value)} placeholder="Enter your username or email" onKeyDown={e => e.key === "Enter" && handleLogin()} />
             <FormInput label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter your password" onKeyDown={e => e.key === "Enter" && handleLogin()} />
             <button className="btn btn-primary" onClick={handleLogin} disabled={loading} style={{ width: "100%", justifyContent: "center", padding: "11px 22px", fontSize: 15, borderRadius: 10, marginTop: 4 }}>{loading ? <><Spinner /> Signing in...</> : "Sign In"}</button>
-            <div style={{ marginTop: 20 }}>
-              <button onClick={() => setShowCreds(p => !p)} style={{ width: "100%", padding: "9px 14px", background: "var(--light-orange)", border: "1px solid rgba(255,106,0,0.2)", borderRadius: 8, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13, fontWeight: 600, color: "var(--deep)" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 7 }}><SvgIcon name="user" size={14} color="var(--deep)" />Demo Credentials  -  Quick Access</div>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ transform: showCreds ? "rotate(180deg)" : "none", transition: "transform 0.2s" }}><polyline points="6 9 12 15 18 9" /></svg>
-              </button>
-              {showCreds && (
-                <div className="fade-in" style={{ border: "1px solid var(--border)", borderTop: "none", borderRadius: "0 0 8px 8px", overflow: "hidden" }}>
-                  {SAMPLE_CREDENTIALS.map((cred, i) => {
-                    const m = ROLE_META[cred.role]; return (
-                      <button key={cred.username} onClick={() => autofill(cred)} style={{ width: "100%", padding: "10px 14px", background: "#fff", border: "none", borderBottom: i < SAMPLE_CREDENTIALS.length - 1 ? "1px solid var(--border)" : "none", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, textAlign: "left" }} onMouseEnter={e => e.currentTarget.style.background = "#F9FAFB"} onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
-                        <div style={{ width: 32, height: 32, borderRadius: 8, background: m.bg, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><SvgIcon name={m.iconName || "user"} size={16} color={m.color} /></div>
-                        <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12.5, fontWeight: 700, color: "var(--dark)" }}>{m.label}  -  {cred.name}</div><div style={{ fontSize: 11.5, color: "var(--muted)" }}>{cred.username} / {cred.password}</div></div>
-                        <span style={{ fontSize: 11.5, color: "var(--primary)", fontWeight: 600, flexShrink: 0 }}>Fill</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
           </div>
         </div>
       </div>

@@ -103,6 +103,10 @@ function CompactUserCard({ u, allUsers, clients, tasks, employees, session, onEd
   else if (u.availability === "not_available") lastActive = "4h ago";
   else if (u.active === false) lastActive = "3d ago";
 
+  const loggedInRole = session?.role?.toLowerCase() || "employee";
+  const canManage = loggedInRole === "superadmin" || loggedInRole === "manager" || u.id === session?.id;
+  const canRemove = (loggedInRole === "superadmin" || loggedInRole === "manager") && u.id !== session?.id;
+
   let metricChips = null;
   if (u.role === "superadmin" || u.role === "manager") {
     const reportsCount = employees.filter(e => e.assignedManager === u.id || e.managerId === u.id).length;
@@ -202,44 +206,46 @@ function CompactUserCard({ u, allUsers, clients, tasks, employees, session, onEd
             </div>
           </div>
 
-          <div style={{ position: "relative" }} onClick={e => e.stopPropagation()}>
-            <button 
-              onClick={(e) => { 
-                e.stopPropagation(); 
-                setOpenDropdownUserId(openDropdownUserId === u.id ? null : u.id); 
-              }} 
-              style={{ background: "none", border: "none", cursor: "pointer", padding: "4px", fontSize: 14, color: "var(--muted)", fontWeight: "bold" }}
-            >
-              ⋮
-            </button>
-            {openDropdownUserId === u.id && (
-              <div 
-                style={{ 
-                  position: "absolute", right: 0, top: "100%", background: "#fff", border: "1px solid var(--border)", 
-                  borderRadius: 8, boxShadow: "var(--shadow-md)", zIndex: 120, minWidth: 100 
-                }}
+          {canManage && (
+            <div style={{ position: "relative" }} onClick={e => e.stopPropagation()}>
+              <button 
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  setOpenDropdownUserId(openDropdownUserId === u.id ? null : u.id); 
+                }} 
+                style={{ background: "none", border: "none", cursor: "pointer", padding: "4px", fontSize: 14, color: "var(--muted)", fontWeight: "bold" }}
               >
-                <button 
-                  onClick={() => { onEdit(u); setOpenDropdownUserId(null); }} 
-                  style={{ width: "100%", textAlign: "left", padding: "6px 10px", background: "none", border: "none", fontSize: 11.5, cursor: "pointer", fontWeight: 600, color: "var(--dark)" }}
-                  onMouseEnter={e => e.target.style.background = "#f5f5f5"}
-                  onMouseLeave={e => e.target.style.background = "none"}
+                ⋮
+              </button>
+              {openDropdownUserId === u.id && (
+                <div 
+                  style={{ 
+                    position: "absolute", right: 0, top: "100%", background: "#fff", border: "1px solid var(--border)", 
+                    borderRadius: 8, boxShadow: "var(--shadow-md)", zIndex: 120, minWidth: 100 
+                  }}
                 >
-                  Edit
-                </button>
-                {u.id !== session?.id && (
                   <button 
-                    onClick={() => { onDelete(u); setOpenDropdownUserId(null); }} 
-                    style={{ width: "100%", textAlign: "left", padding: "6px 10px", background: "none", border: "none", fontSize: 11.5, color: "var(--danger)", cursor: "pointer", fontWeight: 600 }}
-                    onMouseEnter={e => e.target.style.background = "#fef2f2"}
+                    onClick={() => { onEdit(u); setOpenDropdownUserId(null); }} 
+                    style={{ width: "100%", textAlign: "left", padding: "6px 10px", background: "none", border: "none", fontSize: 11.5, cursor: "pointer", fontWeight: 600, color: "var(--dark)" }}
+                    onMouseEnter={e => e.target.style.background = "#f5f5f5"}
                     onMouseLeave={e => e.target.style.background = "none"}
                   >
-                    Remove
+                    Edit
                   </button>
-                )}
-              </div>
-            )}
-          </div>
+                  {canRemove && (
+                    <button 
+                      onClick={() => { onDelete(u); setOpenDropdownUserId(null); }} 
+                      style={{ width: "100%", textAlign: "left", padding: "6px 10px", background: "none", border: "none", fontSize: 11.5, color: "var(--danger)", cursor: "pointer", fontWeight: 600 }}
+                      onMouseEnter={e => e.target.style.background = "#fef2f2"}
+                      onMouseLeave={e => e.target.style.background = "none"}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 8 }}>
@@ -261,12 +267,14 @@ function CompactUserCard({ u, allUsers, clients, tasks, employees, session, onEd
             >
               View
             </button>
-            <button 
-              onClick={() => onEdit(u)} 
-              style={{ background: "none", border: "none", color: "var(--muted)", fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}
-            >
-              Edit
-            </button>
+            {canManage && (
+              <button 
+                onClick={() => onEdit(u)} 
+                style={{ background: "none", border: "none", color: "var(--muted)", fontSize: 10.5, fontWeight: 700, cursor: "pointer" }}
+              >
+                Edit
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -416,6 +424,7 @@ function ProfileDrawer({ user, open, onClose, employees, tasks, clients, allUser
 
 function WorkspacePage({ teamOnly = false }) {
   const { session, showToast, clients, tasks, employees, refreshEmployees, refreshTasks } = useApp();
+  const role = session?.role?.toLowerCase() || "employee";
   const [tab, setTab] = useState("users");
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -577,7 +586,9 @@ function WorkspacePage({ teamOnly = false }) {
           <h1 className="page-title">{teamOnly ? "Team" : "Workspace"}</h1>
           <p className="page-subtitle">{teamOnly ? "Manage employees and managers." : "Manage users, access levels, and performance."}</p>
         </div>
-        <Btn icon={<SvgIcon name="arrowRight" size={13} color="#fff" />} onClick={() => { setEditUser(null); setAddOpen(true); }}>Add User</Btn>
+        {(role === "superadmin" || role === "manager") && (
+          <Btn icon={<SvgIcon name="arrowRight" size={13} color="#fff" />} onClick={() => { setEditUser(null); setAddOpen(true); }}>Add User</Btn>
+        )}
       </div>
 
       {!teamOnly && (

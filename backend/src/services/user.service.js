@@ -234,9 +234,6 @@ export const ListEmployees = async (loggedInUser) => {
         companyId: loggedInUser.companyId,
         role: "EMPLOYEE",
     };
-    if (loggedInUser.role === "MANAGER") {
-        whereClause.managerId = loggedInUser.id;
-    }
     const employees = await prisma.user.findMany({
         where: whereClause,
         select: {
