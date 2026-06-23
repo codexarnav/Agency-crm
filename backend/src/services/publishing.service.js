@@ -468,14 +468,26 @@ export const getSocialStatus = async (clientId, companyId) => {
 
     const facebookConn = socialConns.find(c => c.platform.toLowerCase() === "facebook");
     const instagramConn = socialConns.find(c => c.platform.toLowerCase() === "instagram");
+    const twitterConn = socialConns.find(c => c.platform.toLowerCase() === "twitter");
+    const linkedinConn = socialConns.find(c => c.platform.toLowerCase() === "linkedin");
+    const youtubeConn = socialConns.find(c => c.platform.toLowerCase() === "youtube");
+    const tiktokConn = socialConns.find(c => c.platform.toLowerCase() === "tiktok");
 
     return {
         clientName: client.companyName || client.brandName || "Client",
         connected: socialConns.length > 0,
         facebookConnected: !!facebookConn,
         instagramConnected: !!instagramConn,
+        twitterConnected: !!twitterConn,
+        linkedinConnected: !!linkedinConn,
+        youtubeConnected: !!youtubeConn,
+        tiktokConnected: !!tiktokConn,
         facebookPageName: facebookConn ? facebookConn.profileName : null,
         instagramUsername: instagramConn ? instagramConn.profileName : null,
+        twitterUsername: twitterConn ? twitterConn.profileName : null,
+        linkedinUsername: linkedinConn ? linkedinConn.profileName : null,
+        youtubeUsername: youtubeConn ? youtubeConn.profileName : null,
+        tiktokUsername: tiktokConn ? tiktokConn.profileName : null,
     };
 };
 

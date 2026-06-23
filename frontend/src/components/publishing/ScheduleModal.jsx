@@ -41,6 +41,10 @@ export default function ScheduleModal({ open, onClose, task, shoot, onSuccess })
                         const initial = [];
                         if (res.data.instagramConnected) initial.push("INSTAGRAM");
                         if (res.data.facebookConnected) initial.push("FACEBOOK");
+                        if (res.data.twitterConnected) initial.push("TWITTER");
+                        if (res.data.linkedinConnected) initial.push("LINKEDIN");
+                        if (res.data.youtubeConnected) initial.push("YOUTUBE");
+                        if (res.data.tiktokConnected) initial.push("TIKTOK");
                         setSelectedPlatforms(initial);
                     }
                 })
@@ -109,37 +113,40 @@ export default function ScheduleModal({ open, onClose, task, shoot, onSuccess })
                             <div style={{ fontSize: 12, color: "var(--muted)", padding: "4px 0" }}>Checking client connections...</div>
                         ) : connectionStatus ? (
                             <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "4px 0" }}>
-                                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: connectionStatus.instagramConnected ? "pointer" : "not-allowed", opacity: connectionStatus.instagramConnected ? 1 : 0.6 }}>
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedPlatforms.includes("INSTAGRAM")}
-                                        disabled={!connectionStatus.instagramConnected}
-                                        onChange={(e) => {
-                                            if (e.target.checked) {
-                                                setSelectedPlatforms([...selectedPlatforms, "INSTAGRAM"]);
-                                            } else {
-                                                setSelectedPlatforms(selectedPlatforms.filter(p => p !== "INSTAGRAM"));
-                                            }
-                                        }}
-                                    />
-                                    <span>Instagram {connectionStatus.instagramConnected ? `(${connectionStatus.instagramUsername || "Connected"})` : "(Not Connected)"}</span>
-                                </label>
-                                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: connectionStatus.facebookConnected ? "pointer" : "not-allowed", opacity: connectionStatus.facebookConnected ? 1 : 0.6 }}>
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedPlatforms.includes("FACEBOOK")}
-                                        disabled={!connectionStatus.facebookConnected}
-                                        onChange={(e) => {
-                                            if (e.target.checked) {
-                                                setSelectedPlatforms([...selectedPlatforms, "FACEBOOK"]);
-                                            } else {
-                                                setSelectedPlatforms(selectedPlatforms.filter(p => p !== "FACEBOOK"));
-                                            }
-                                        }}
-                                    />
-                                    <span>Facebook {connectionStatus.facebookConnected ? `(${connectionStatus.facebookPageName || "Connected"})` : "(Not Connected)"}</span>
-                                </label>
-                                {!connectionStatus.instagramConnected && !connectionStatus.facebookConnected && (
+                                {[
+                                    { key: "INSTAGRAM", name: "Instagram", statusKey: "instagramConnected", usernameKey: "instagramUsername" },
+                                    { key: "FACEBOOK", name: "Facebook", statusKey: "facebookConnected", usernameKey: "facebookPageName" },
+                                    { key: "TWITTER", name: "X (Twitter)", statusKey: "twitterConnected", usernameKey: "twitterUsername" },
+                                    { key: "LINKEDIN", name: "LinkedIn", statusKey: "linkedinConnected", usernameKey: "linkedinUsername" },
+                                    { key: "YOUTUBE", name: "YouTube", statusKey: "youtubeConnected", usernameKey: "youtubeUsername" },
+                                    { key: "TIKTOK", name: "TikTok", statusKey: "tiktokConnected", usernameKey: "tiktokUsername" }
+                                ].map((p) => {
+                                    const isConnected = connectionStatus[p.statusKey];
+                                    const username = connectionStatus[p.usernameKey];
+                                    return (
+                                        <label key={p.key} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: isConnected ? "pointer" : "not-allowed", opacity: isConnected ? 1 : 0.6 }}>
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedPlatforms.includes(p.key)}
+                                                disabled={!isConnected}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setSelectedPlatforms([...selectedPlatforms, p.key]);
+                                                    } else {
+                                                        setSelectedPlatforms(selectedPlatforms.filter(item => item !== p.key));
+                                                    }
+                                                }}
+                                            />
+                                            <span>{p.name} {isConnected ? `(${username || "Connected"})` : "(Not Connected)"}</span>
+                                        </label>
+                                    );
+                                })}
+                                {!connectionStatus.instagramConnected && 
+                                 !connectionStatus.facebookConnected && 
+                                 !connectionStatus.twitterConnected && 
+                                 !connectionStatus.linkedinConnected && 
+                                 !connectionStatus.youtubeConnected && 
+                                 !connectionStatus.tiktokConnected && (
                                     <div style={{ fontSize: 12, color: "var(--danger)", marginTop: 4 }}>
                                         ⚠️ Client has no connected social accounts. Please link them under Client Settings.
                                     </div>
