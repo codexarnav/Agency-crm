@@ -468,7 +468,8 @@ export async function disconnectInstagram() {
   return request("DELETE", "/social/connections/instagram");
 }
 
-export async function disconnectPlatform(platform) {
-  return request("DELETE", `/social/connections/${platform.toLowerCase()}`);
+export async function disconnectPlatform(platform, clientId = null) {
+  const query = clientId ? `?clientId=${clientId}` : "";
+  return request("DELETE", `/social/connections/${platform.toLowerCase()}${query}`);
 }
 

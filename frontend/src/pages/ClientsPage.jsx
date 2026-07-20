@@ -6,7 +6,7 @@ import {
   SvgIcon, Btn, Avatar, EmptyState, SearchBar,
   Modal, FormInput, DataTable, ProgressBar, InfoRow,
 } from "../shared/components";
-import { createClient as apiCreateClient, updateClient, deleteClient, getManagers } from "../services/api";
+import { createClient as apiCreateClient, updateClient, deleteClient, getManagers, getClientSocialConnection, getToken, disconnectPlatform } from "../services/api";
 
 // Client helpers
 function clientStatusMeta(status) {
@@ -17,6 +17,121 @@ function clientStatusMeta(status) {
     on_hold: { cls: "badge-muted", label: "On Hold", dot: "#6B7280" },
   };
   return m[status] || { cls: "badge-muted", label: status, dot: "#6B7280" };
+}
+
+function SocialConnectionsSection({ clientId, showToast }) {
+  const [connections, setConnections] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const fetchConnections = async () => {
+    try {
+      setLoading(true);
+      const res = await getClientSocialConnection(clientId);
+      if (res.success && res.data) {
+        setConnections(res.data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (clientId) {
+      fetchConnections();
+    }
+  }, [clientId]);
+
+  const handleConnect = (platformKey) => {
+    let backendHost = "";
+    const apiEnv = import.meta.env.VITE_API_URL;
+    if (apiEnv) {
+      backendHost = apiEnv.replace(/\/api\/?$/, "").replace(/\/$/, "");
+    } else {
+      backendHost = "http://localhost:5000";
+    }
+
+    const token = getToken();
+    if (!token) {
+      showToast("Session expired. Please log in again.", "danger");
+      return;
+    }
+
+    const connectionUrl = `${backendHost}/auth/postproxy/connect?token=${token}&platform=${platformKey}&clientId=${clientId}`;
+    window.location.href = connectionUrl;
+  };
+
+  const handleDisconnect = async (platformKey, platformName) => {
+    if (!window.confirm(`Are you sure you want to disconnect ${platformName}?`)) return;
+    try {
+      setLoading(true);
+      const res = await disconnectPlatform(platformKey, clientId);
+      if (res.success) {
+        showToast(`${platformName} disconnected successfully!`, "success");
+        fetchConnections();
+      }
+    } catch (err) {
+      console.error(err);
+      showToast(`Failed to disconnect ${platformName}.`, "danger");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const SUPPORTED_PLATFORMS = [
+    { key: "instagram", name: "Instagram", statusKey: "instagramConnected", usernameKey: "instagramUsername", icon: "I", color: "#E1306C" },
+    { key: "facebook", name: "Facebook", statusKey: "facebookConnected", usernameKey: "facebookPageName", icon: "F", color: "#1877F2" },
+    { key: "linkedin", name: "LinkedIn", statusKey: "linkedinConnected", usernameKey: "linkedinUsername", icon: "L", color: "#0A66C2" },
+    { key: "youtube", name: "YouTube", statusKey: "youtubeConnected", usernameKey: "youtubeUsername", icon: "Y", color: "#FF0000" },
+    { key: "twitter", name: "X (Twitter)", statusKey: "twitterConnected", usernameKey: "twitterUsername", icon: "X", color: "#1DA1F2" },
+    { key: "tiktok", name: "TikTok", statusKey: "tiktokConnected", usernameKey: "tiktokUsername", icon: "T", color: "#010101" }
+  ];
+
+  if (loading && !connections) {
+    return <div style={{ fontSize: 12.5, color: "var(--muted)", padding: "10px 0" }}>Loading connections status...</div>;
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {SUPPORTED_PLATFORMS.map(platform => {
+        const isConnected = connections ? connections[platform.statusKey] : false;
+        const username = connections ? connections[platform.usernameKey] : "";
+        return (
+          <div key={platform.key} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: "#F9FAFB", borderRadius: 8, border: "1px solid var(--border)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 26, height: 26, borderRadius: 6, background: isConnected ? "rgba(255,106,0,0.1)" : "rgba(0,0,0,0.05)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: platform.color }}>
+                {platform.icon}
+              </div>
+              <div>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--dark)" }}>{platform.name}</span>
+                {isConnected && username && (
+                  <span style={{ fontSize: 11, color: "var(--muted)", marginLeft: 6 }}>@{username}</span>
+                )}
+              </div>
+            </div>
+            {isConnected ? (
+              <button 
+                type="button" 
+                onClick={() => handleDisconnect(platform.key, platform.name)}
+                style={{ background: "transparent", border: "none", color: "var(--danger)", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}
+              >
+                Disconnect
+              </button>
+            ) : (
+              <button 
+                type="button" 
+                onClick={() => handleConnect(platform.key)}
+                style={{ background: "transparent", border: "none", color: "var(--primary)", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}
+              >
+                Connect
+              </button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 
@@ -103,10 +218,12 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
     }
   };
 
+  const { showToast } = useApp();
   const [form, setForm] = useState(getInitialForm);
   const [deliverableTab, setDeliverableTab] = useState("monthly");
   const [errors, setErrors] = useState({});
   const [created, setCreated] = useState(false);
+  const [createdClientId, setCreatedClientId] = useState(null);
 
   const set = (k, v) => {
     setForm(p => {
@@ -190,8 +307,16 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
     };
 
     if (!initial) {
-      setCreated(true);
-      onSave(finalForm);
+      onSave(finalForm)
+        .then(newClient => {
+          if (newClient && newClient.id) {
+            setCreatedClientId(newClient.id);
+            setCreated(true);
+          } else {
+            onClose();
+          }
+        })
+        .catch(() => {});
     } else {
       onSave(finalForm);
     }
@@ -209,15 +334,21 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
       <Modal open={open} onClose={onClose} size="md" title="Client Created Successfully 🎉"
         footer={<div style={{ display: "flex", gap: 10 }}><Btn onClick={onClose}>Close & Refresh</Btn></div>}
       >
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "10px 0" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, padding: "10px 0" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, padding: 16, background: "#DCFCE7", borderRadius: 10, border: "1px solid #BBF7D0" }}>
             <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#16A34A", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
             </div>
             <div>
               <p style={{ fontSize: 14, fontWeight: 700, color: "#15803D", margin: 0 }}>Credentials Sent via Email</p>
-              <p style={{ fontSize: 12.5, color: "#166534", margin: "4px 0 0", lineHeight: 1.4 }}>Login credentials have been automatically emailed to the client. They will be required to change their password on first login.</p>
+              <p style={{ fontSize: 12.5, color: "#166534", margin: "4px 0 0", lineHeight: 1.4 }}>Login credentials have been automatically emailed to the client.</p>
             </div>
+          </div>
+
+          <div style={{ border: "1px solid var(--border)", borderRadius: 10, padding: 16, background: "#F9FAFB" }}>
+            <p style={{ fontSize: 13.5, fontWeight: 700, margin: "0 0 10px", fontFamily: "'Plus Jakarta Sans', sans-serif" }}>🔗 Connect Social Media Accounts Now</p>
+            <p style={{ fontSize: 12, color: "var(--muted)", margin: "0 0 14px", lineHeight: 1.4 }}>You can link the client's social accounts directly to set up automated publishing immediately.</p>
+            <SocialConnectionsSection clientId={createdClientId} showToast={showToast} />
           </div>
         </div>
       </Modal>
@@ -451,6 +582,15 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
           </div>
         </div>
 
+        {initial && (
+          <div style={{ marginTop: 12 }}>
+            <h3 style={{ fontSize: 13.5, fontWeight: 700, color: "var(--primary)", borderBottom: "1px solid var(--border)", paddingBottom: 6, marginBottom: 14, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              🔗 Connected Social Accounts
+            </h3>
+            <SocialConnectionsSection clientId={initial.id} showToast={showToast} />
+          </div>
+        )}
+
       </div>
     </Modal>
   );
@@ -580,6 +720,13 @@ function ClientDrawer({ client, open, onClose, tasks, employees, onEdit, canDele
           )}
 
           <div className="divider" style={{ margin: "10px 0 16px" }} />
+          
+          <div style={{ marginBottom: 20 }}>
+            <p style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 8, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>🔗 Connected Social Accounts</p>
+            <SocialConnectionsSection clientId={client.id} showToast={showToast} />
+          </div>
+
+          <div className="divider" style={{ margin: "10px 0 16px" }} />
           <InfoRow label="Contact Person" value={client.contactPerson} />
           <InfoRow label="Email" value={client.email} />
           <InfoRow label="Phone" value={client.phone} />
@@ -653,6 +800,29 @@ function ClientsPage() {
     }
   }, [role]);
 
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const success = searchParams.get("success");
+    const error = searchParams.get("error");
+    const connectedClientId = searchParams.get("clientId");
+
+    if (success === "true") {
+      showToast("Social account connected successfully!", "success");
+      window.history.replaceState({}, document.title, window.location.pathname);
+      refreshClients();
+      
+      if (connectedClientId) {
+        const found = clients.find(c => c.id === connectedClientId);
+        if (found) {
+          setDrawerClient(found);
+        }
+      }
+    } else if (error === "oauth_failed") {
+      showToast("Failed to connect social account.", "danger");
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [clients]);
+
   const canDelete = role === "superadmin";
   const canAdd = role === "superadmin" || role === "manager";
 
@@ -676,7 +846,7 @@ function ClientsPage() {
 
   const handleAdd = async (form) => {
     try {
-      await apiCreateClient({
+      const res = await apiCreateClient({
         username: form.email.split("@")[0] + "_" + Math.floor(Math.random() * 100),
         companyName: form.name,
         email: form.email,
@@ -696,10 +866,11 @@ function ClientsPage() {
         notes: form.notes || ""
       });
       showToast(`Client "${form.name}" added successfully.`, "success");
-      setAddOpen(false);
       refreshClients();
+      return res.data;
     } catch (err) {
       showToast(err.message || "Failed to add client", "danger");
+      throw err;
     }
   };
 

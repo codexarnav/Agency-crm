@@ -61,7 +61,10 @@ export const getSocialConnections = async (req, res) => {
 // DELETE /api/social/connections/facebook
 export const disconnectFacebook = async (req, res) => {
     try {
-        const clientId = req.user.id;
+        let clientId = req.user.id;
+        if ((req.user.role === "SUPER_ADMIN" || req.user.role === "MANAGER") && req.query.clientId) {
+            clientId = req.query.clientId;
+        }
         await prisma.socialConnection.deleteMany({
             where: {
                 clientId,
@@ -78,7 +81,10 @@ export const disconnectFacebook = async (req, res) => {
 // DELETE /api/social/connections/instagram
 export const disconnectInstagram = async (req, res) => {
     try {
-        const clientId = req.user.id;
+        let clientId = req.user.id;
+        if ((req.user.role === "SUPER_ADMIN" || req.user.role === "MANAGER") && req.query.clientId) {
+            clientId = req.query.clientId;
+        }
         await prisma.socialConnection.deleteMany({
             where: {
                 clientId,
@@ -95,7 +101,10 @@ export const disconnectInstagram = async (req, res) => {
 // DELETE /api/social/connections/:platform
 export const disconnectPlatform = async (req, res) => {
     try {
-        const clientId = req.user.id;
+        let clientId = req.user.id;
+        if ((req.user.role === "SUPER_ADMIN" || req.user.role === "MANAGER") && req.query.clientId) {
+            clientId = req.query.clientId;
+        }
         const { platform } = req.params;
         await prisma.socialConnection.deleteMany({
             where: {
