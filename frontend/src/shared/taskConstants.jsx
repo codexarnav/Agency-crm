@@ -351,7 +351,7 @@ function ApprovalModal({ open, onClose, task, onAction, role }) {
             {task.contentLink ? (
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <a href={task.contentLink} target="_blank" rel="noreferrer" style={{ flex: 1, padding: "9px 12px", background: "#F9FAFB", border: "1.5px solid var(--border)", borderRadius: 8, fontSize: 13, color: "var(--primary)", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{getCleanLinkLabel(task.contentLink, task.contentType)}</a>
-                <Btn variant="outline" size="sm" onClick={() => window.open(task.contentLink, "_blank")}>Open</Btn>
+                <Btn variant="outline" size="sm" onClick={() => window.open(task.contentLink, "_blank")}>Preview</Btn>
               </div>
             ) : (
               <div style={{ padding: "10px 12px", background: "#F9FAFB", border: "1.5px dashed var(--border)", borderRadius: 8, fontSize: 13, color: "var(--muted)" }}>No content link submitted yet</div>

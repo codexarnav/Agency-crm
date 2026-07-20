@@ -582,14 +582,22 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
           </div>
         </div>
 
-        {initial && (
-          <div style={{ marginTop: 12 }}>
-            <h3 style={{ fontSize: 13.5, fontWeight: 700, color: "var(--primary)", borderBottom: "1px solid var(--border)", paddingBottom: 6, marginBottom: 14, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-              🔗 Connected Social Accounts
-            </h3>
+        {/* Section 4: Social Connections */}
+        <div style={{ marginTop: 12 }}>
+          <h3 style={{ fontSize: 13.5, fontWeight: 700, color: "var(--primary)", borderBottom: "1px solid var(--border)", paddingBottom: 6, marginBottom: 14, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            🔗 Social Media Connections
+          </h3>
+          {initial ? (
             <SocialConnectionsSection clientId={initial.id} showToast={showToast} />
-          </div>
-        )}
+          ) : (
+            <div style={{ background: "#F3F4F6", padding: "12px 16px", borderRadius: 8, border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 10 }}>
+              <SvgIcon name="alert" size={16} color="var(--muted)" />
+              <span style={{ fontSize: 12.5, color: "var(--muted)", fontWeight: 500 }}>
+                Social media accounts can be connected immediately after saving the client profile details.
+              </span>
+            </div>
+          )}
+        </div>
 
       </div>
     </Modal>
@@ -599,6 +607,7 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
 // ClientDrawer
 function ClientDrawer({ client, open, onClose, tasks, employees, onEdit, canDelete, onDelete }) {
   if (!open || !client) return null;
+  const { showToast } = useApp();
   const meta = clientStatusMeta(client.status);
   const clientTasks = tasks.filter(t => t.clientId === client.id);
   const approved = clientTasks.filter(t => t.approvalStatus === "approved").length;
