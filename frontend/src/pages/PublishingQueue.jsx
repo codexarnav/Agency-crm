@@ -5,7 +5,6 @@ import {
     reschedulePost,
     cancelPost,
     retryPublishingJob,
-    deletePublishingJob,
 } from "../services/api";
 import {
     SvgIcon,
@@ -41,9 +40,6 @@ export default function PublishingQueue() {
 
     // Cancel states
     const [cancelOpen, setCancelOpen] = useState(false);
-
-    // Delete states
-    const [deleteOpen, setDeleteOpen] = useState(false);
 
     // Fetch queue
     const fetchQueue = useCallback(async () => {
@@ -112,21 +108,6 @@ export default function PublishingQueue() {
             fetchQueue();
         } catch (err) {
             showToast(err.message || "Failed to cancel post schedule", "danger");
-        }
-    };
-
-    // Handle Delete submit
-    const handleDeleteSubmit = async () => {
-        if (!selectedJob) return;
-
-        try {
-            await deletePublishingJob(selectedJob.id);
-            showToast("Publishing job deleted successfully", "success");
-            setDeleteOpen(false);
-            setSelectedJob(null);
-            fetchQueue();
-        } catch (err) {
-            showToast(err.message || "Failed to delete post", "danger");
         }
     };
 
@@ -315,7 +296,7 @@ export default function PublishingQueue() {
                                                         </Btn>
                                                     </>
                                                 )}
-                                                {job.status === "FAILED" && (
+                                                 {job.status === "FAILED" && (
                                                     <Btn
                                                         size="xs"
                                                         variant="primary"
@@ -332,16 +313,6 @@ export default function PublishingQueue() {
                                                         Retry
                                                     </Btn>
                                                 )}
-                                                <Btn
-                                                    size="xs"
-                                                    variant="danger"
-                                                    onClick={() => {
-                                                        setSelectedJob(job);
-                                                        setDeleteOpen(true);
-                                                    }}
-                                                >
-                                                    Delete
-                                                </Btn>
                                             </div>
                                         </td>
                                     </tr>
@@ -503,39 +474,6 @@ export default function PublishingQueue() {
                         </Btn>
                         <Btn variant="danger" onClick={handleCancelSubmit}>
                             Yes, Cancel Post
-                        </Btn>
-                    </div>
-                </div>
-            </Modal>
-
-            {/* Delete Confirm Modal */}
-            <Modal
-                open={deleteOpen}
-                onClose={() => {
-                    setDeleteOpen(false);
-                    setSelectedJob(null);
-                }}
-                title="Delete Publishing Job"
-                size="sm"
-            >
-                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                    <p style={{ fontSize: 13.5, lineHeight: 1.5 }}>
-                        Are you sure you want to delete this publishing job? 
-                        {selectedJob?.status === "PUBLISHED" && selectedJob?.platform.toUpperCase() === "FACEBOOK" && (
-                            <span> This will also attempt to delete the published post from Facebook.</span>
-                        )}
-                        This action cannot be undone.
-                    </p>
-
-                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 8 }}>
-                        <Btn variant="outline" onClick={() => {
-                            setDeleteOpen(false);
-                            setSelectedJob(null);
-                        }}>
-                            Cancel
-                        </Btn>
-                        <Btn variant="danger" onClick={handleDeleteSubmit}>
-                            Yes, Delete Job
                         </Btn>
                     </div>
                 </div>
