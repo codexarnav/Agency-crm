@@ -14,11 +14,15 @@ import {
     EmptyState,
     Modal,
 } from "../shared/components";
+import CreatePostModal from "../components/CreatePostModal";
 
 export default function PublishingQueue() {
     const { clients, showToast } = useApp();
     const [queue, setQueue] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    // Create post modal state
+    const [createPostOpen, setCreatePostOpen] = useState(false);
 
     // Filters
     const [search, setSearch] = useState("");
@@ -137,9 +141,16 @@ export default function PublishingQueue() {
     return (
         <div className="fade-in">
             {/* Header */}
-            <div className="page-header" style={{ marginBottom: 20 }}>
-                <h1 className="page-title">Publishing Queue</h1>
-                <p className="page-subtitle">Track, reschedule, and manage scheduled posts across brand platforms.</p>
+            <div className="page-header flex-between" style={{ marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+                <div>
+                    <h1 className="page-title">Publishing Queue</h1>
+                    <p className="page-subtitle">Track, reschedule, and manage scheduled posts across brand platforms.</p>
+                </div>
+                <div>
+                    <Btn icon={<SvgIcon name="video" size={14} color="#fff" />} onClick={() => setCreatePostOpen(true)}>
+                        + Create Post
+                    </Btn>
+                </div>
             </div>
 
             {/* Stats Cards */}
@@ -529,6 +540,13 @@ export default function PublishingQueue() {
                     </div>
                 </div>
             </Modal>
+
+            {/* Create Post Modal */}
+            <CreatePostModal
+                open={createPostOpen}
+                onClose={() => setCreatePostOpen(false)}
+                onSuccess={fetchQueue}
+            />
         </div>
     );
 }

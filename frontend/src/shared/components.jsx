@@ -264,9 +264,10 @@ function EmptyState({ icon, title, desc, action }) {
 // Modal
 function Modal({ open, onClose, title, children, footer, size = "" }) {
   if (!open) return null;
+  const sizeClass = size === "lg" ? "modal-lg" : size === "fullscreen" ? "modal-fullscreen" : "";
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className={`modal-box ${size === "lg" ? "modal-lg" : ""}`}>
+      <div className={`modal-box ${sizeClass}`}>
         <div className="modal-header">
           <h3 className="modal-title">{title}</h3>
           <button className="btn btn-ghost btn-icon btn-sm" onClick={onClose}>

@@ -11,11 +11,14 @@ import {
     StatusBadge,
     Modal,
 } from "../shared/components";
+import CreatePostModal from "../components/CreatePostModal";
 
 export default function PublishingCalendar() {
     const { clients, showToast } = useApp();
     const [jobs, setJobs] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    const [createPostOpen, setCreatePostOpen] = useState(false);
 
     const [view, setView] = useState("month"); // 'month' or 'week'
     const [pivotDate, setPivotDate] = useState(new Date());
@@ -248,9 +251,12 @@ export default function PublishingCalendar() {
                             : `Week of ${pivotDate.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`}
                     </p>
                 </div>
-                <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <button className={`filter-chip ${view === "month" ? "active" : ""}`} onClick={() => setView("month")}>Month</button>
                     <button className={`filter-chip ${view === "week" ? "active" : ""}`} onClick={() => setView("week")}>Week</button>
+                    <Btn icon={<SvgIcon name="video" size={14} color="#fff" />} onClick={() => setCreatePostOpen(true)}>
+                        + Create Post
+                    </Btn>
                 </div>
             </div>
 
@@ -556,6 +562,13 @@ export default function PublishingCalendar() {
                     </div>
                 </form>
             </Modal>
+
+            {/* Create Post Modal */}
+            <CreatePostModal
+                open={createPostOpen}
+                onClose={() => setCreatePostOpen(false)}
+                onSuccess={fetchJobs}
+            />
         </div>
     );
 }

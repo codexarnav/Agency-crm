@@ -30,22 +30,18 @@ const notifyAssignee = async (job, type, content, senderId) => {
  * Schedule a new publishing job
  */
 export const schedulePost = async (data, loggedInUser) => {
-    const { taskId, shootId, platform, platforms, caption, mediaUrls, scheduledAt } = data;
+    const { taskId, shootId, platform, platforms, title, contentType, thumbnailUrl, caption, mediaUrls, scheduledAt, postNow } = data;
 
-    if (!taskId && !shootId) {
-        throw new Error("Either taskId or shootId must be provided to schedule a post");
+    if (!taskId && !shootId && !data.clientId) {
+        throw new Error("Client selection, taskId, or shootId is required to schedule a post");
     }
 
     if (!platform && (!platforms || platforms.length === 0)) {
         throw new Error("Platform(s) selection is required");
     }
 
-    if (!scheduledAt) {
-        throw new Error("Scheduled date and time are required");
-    }
-
     let companyId = loggedInUser.companyId;
-    let clientId = null;
+    let clientId = data.clientId || null;
     let task = null;
     let shoot = null;
 
@@ -107,8 +103,9 @@ export const schedulePost = async (data, loggedInUser) => {
     }
 
     const createdJobs = [];
-    const scheduleDateObj = new Date(scheduledAt);
-    const delayMs = scheduleDateObj.getTime() - Date.now();
+    const isImmediate = postNow || !scheduledAt;
+    const scheduleDateObj = isImmediate ? new Date() : new Date(scheduledAt);
+    const delayMs = isImmediate ? 0 : Math.max(0, scheduleDateObj.getTime() - Date.now());
 
     // Create a publishing job for each selected platform
     for (const p of targetPlatforms) {
@@ -119,6 +116,9 @@ export const schedulePost = async (data, loggedInUser) => {
                 managerId: loggedInUser.id,
                 taskId: taskId || null,
                 shootId: shootId || null,
+                title: title || null,
+                contentType: contentType || null,
+                thumbnailUrl: thumbnailUrl || null,
                 platform: p.toUpperCase(),
                 caption: caption || null,
                 mediaUrls: Array.isArray(mediaUrls) ? mediaUrls.join(",") : (mediaUrls || ""),
@@ -134,7 +134,7 @@ export const schedulePost = async (data, loggedInUser) => {
             },
         });
 
-        // Add to BullMQ Queue
+        // Add to BullMQ / PgBoss Queue
         await addPublishingJob(job.id, delayMs);
         createdJobs.push(job);
     }
@@ -474,6 +474,7 @@ export const getSocialStatus = async (clientId, companyId) => {
     const tiktokConn = socialConns.find(c => c.platform.toLowerCase() === "tiktok");
 
     return {
+        connectedPlatforms: socialConns.map(c => c.platform.toLowerCase()),
         clientName: client.companyName || client.brandName || "Client",
         connected: socialConns.length > 0,
         facebookConnected: !!facebookConn,

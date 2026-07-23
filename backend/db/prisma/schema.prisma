@@ -651,6 +651,10 @@ model PublishingJob {
   shootId String?
   shoot Shoot? @relation(fields: [shootId], references: [id])
 
+  title String?
+  contentType String?
+  thumbnailUrl String?
+
   platform String
 
   caption String?

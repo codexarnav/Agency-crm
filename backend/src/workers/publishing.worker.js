@@ -60,25 +60,34 @@ async function processSingleJob(job) {
       throw new Error(`Client "${pubJob.client.companyName}" has no connected profile for platform "${pubJob.platform}"`);
     }
 
-    // Check the media link
-    let imageUrl = pubJob.mediaUrls ? pubJob.mediaUrls.split(",")[0] : null;
-    if (!imageUrl) {
+    // Collect all media links including thumbnail
+    let mediaList = pubJob.mediaUrls ? pubJob.mediaUrls.split(",").map(u => u.trim()).filter(Boolean) : [];
+    if (pubJob.thumbnailUrl && !mediaList.includes(pubJob.thumbnailUrl)) {
+      mediaList.unshift(pubJob.thumbnailUrl);
+    }
+    if (mediaList.length === 0) {
       if (pubJob.task && pubJob.task.contentLink) {
-        imageUrl = pubJob.task.contentLink;
+        mediaList.push(pubJob.task.contentLink);
       } else if (pubJob.shoot && pubJob.shoot.shootDraftUrl) {
-        imageUrl = pubJob.shoot.shootDraftUrl;
+        mediaList.push(pubJob.shoot.shootDraftUrl);
       }
     }
 
-    const caption = pubJob.caption || (pubJob.task ? pubJob.task.title : (pubJob.shoot ? pubJob.shoot.title : ""));
+    // Format post body with title if present
+    let postBody = pubJob.caption || (pubJob.task ? pubJob.task.title : (pubJob.shoot ? pubJob.shoot.title : ""));
+    if (pubJob.title && pubJob.caption) {
+      postBody = `${pubJob.title}\n\n${pubJob.caption}`;
+    } else if (pubJob.title) {
+      postBody = pubJob.title;
+    }
 
     let externalPostId = null;
 
     console.log(`Publishing to PostProxy using profile ID: ${socialConn.postproxyProfileId} for platform ${pubJob.platform}`);
     const result = await publishPost(
       [socialConn.postproxyProfileId],
-      caption,
-      imageUrl ? [imageUrl] : []
+      postBody,
+      mediaList
     );
     externalPostId = result.id;
 

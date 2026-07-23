@@ -47,6 +47,9 @@ function AppShell({ session, logout, updateSession }) {
     if (window.location.pathname === "/client/settings/social") {
       return "settings_social";
     }
+    if (window.location.pathname === "/clients") {
+      return "clients";
+    }
     const role = session?.role?.toLowerCase();
     if (role === "superadmin" || role === "manager") {
       return "users";
@@ -61,6 +64,10 @@ function AppShell({ session, logout, updateSession }) {
       }
     } else {
       if (window.location.pathname === "/client/settings/social") {
+        window.history.pushState({}, "", "/");
+      }
+      // Clean up /clients path after OAuth redirect is processed
+      if (window.location.pathname === "/clients" && page !== "clients") {
         window.history.pushState({}, "", "/");
       }
     }

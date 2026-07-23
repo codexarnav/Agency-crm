@@ -198,6 +198,7 @@ const css = `
     animation: slideUp 0.2s ease;
   }
   .modal-box.modal-lg { max-width: 720px; }
+  .modal-box.modal-fullscreen { max-width: 70vw; width: 70vw; max-height: 90vh; overflow: hidden; }
   .modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
   .modal-title { font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 700; font-size: 16px; }
   .modal-body { padding: 24px; }
