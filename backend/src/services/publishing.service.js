@@ -190,6 +190,7 @@ export const getPublishingQueue = async (companyId, filters = {}) => {
     if (search && search.trim() !== "") {
         const query = search.trim();
         where.OR = [
+            { title: { contains: query, mode: "insensitive" } },
             { caption: { contains: query, mode: "insensitive" } },
             {
                 client: {
