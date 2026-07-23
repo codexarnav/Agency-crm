@@ -30,7 +30,7 @@ const notifyAssignee = async (job, type, content, senderId) => {
  * Schedule a new publishing job
  */
 export const schedulePost = async (data, loggedInUser) => {
-    const { taskId, shootId, platform, platforms, title, contentType, thumbnailUrl, caption, mediaUrls, scheduledAt, postNow } = data;
+    const { taskId, shootId, platform, platforms, caption, mediaUrls, scheduledAt, postNow } = data;
 
     if (!taskId && !shootId && !data.clientId) {
         throw new Error("Client selection, taskId, or shootId is required to schedule a post");
@@ -116,9 +116,6 @@ export const schedulePost = async (data, loggedInUser) => {
                 managerId: loggedInUser.id,
                 taskId: taskId || null,
                 shootId: shootId || null,
-                title: title || null,
-                contentType: contentType || null,
-                thumbnailUrl: thumbnailUrl || null,
                 platform: p.toUpperCase(),
                 caption: caption || null,
                 mediaUrls: Array.isArray(mediaUrls) ? mediaUrls.join(",") : (mediaUrls || ""),
@@ -190,7 +187,6 @@ export const getPublishingQueue = async (companyId, filters = {}) => {
     if (search && search.trim() !== "") {
         const query = search.trim();
         where.OR = [
-            { title: { contains: query, mode: "insensitive" } },
             { caption: { contains: query, mode: "insensitive" } },
             {
                 client: {
