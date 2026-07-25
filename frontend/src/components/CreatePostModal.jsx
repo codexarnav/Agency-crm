@@ -29,27 +29,18 @@ const CONTENT_TYPE_PLATFORMS = {
   story: ["instagram", "facebook"],
 };
 
-// ── Navigation Sections ──────────────────────────────────────────
-const SECTIONS = [
-  { id: "basic", label: "Basic Details", icon: "user" },
-  { id: "content", label: "Content", icon: "checklist" },
-  { id: "media", label: "Media", icon: "image" },
-  { id: "publishing", label: "Publishing", icon: "clock" },
-  { id: "review", label: "Review", icon: "check" },
+// ── Navigation Workspaces ──────────────────────────────────────────
+const WORKSPACES = [
+  { id: "post_details", label: "Post Details" },
+  { id: "media", label: "Media" },
+  { id: "publishing", label: "Publishing" },
 ];
 
 export default function CreatePostModal({ open, onClose, onSuccess }) {
   const { clients, showToast } = useApp();
 
-  // Active section tab & accordions
-  const [activeTab, setActiveTab] = useState("basic");
-  const [expandedSections, setExpandedSections] = useState({
-    basic: true,
-    content: true,
-    media: false,
-    publishing: false,
-    review: false,
-  });
+  // Active workspace tab
+  const [activeTab, setActiveTab] = useState("post_details");
 
   // Form State
   const [clientId, setClientId] = useState("");
@@ -141,52 +132,9 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
     setSelectedPlatforms(matched);
   }, [socialStatus, contentType]);
 
-  // Progressive Disclosure: Auto-expand subsequent section when prior step is completed
-  useEffect(() => {
-    if (clientId && contentType) {
-      setExpandedSections((prev) => ({ ...prev, basic: true }));
-    }
-    if (title || caption) {
-      setExpandedSections((prev) => ({ ...prev, content: true }));
-    }
-    if (mediaUrl || thumbnailUrl) {
-      setExpandedSections((prev) => ({ ...prev, media: true, publishing: true }));
-    }
-  }, [clientId, contentType, title, caption, mediaUrl, thumbnailUrl]);
-
   const selectedClient = useMemo(() => {
     return clients.find((c) => c.id === clientId);
   }, [clients, clientId]);
-
-  // Section completion status checks
-  const completionStatus = useMemo(() => ({
-    basic: Boolean(clientId && selectedPlatforms.length > 0),
-    content: Boolean(title.trim() || caption.trim()),
-    media: Boolean(mediaUrl || thumbnailUrl),
-    publishing: Boolean(timingMode === "post_now" || (scheduleDate && scheduleTime)),
-    review: Boolean(clientId && selectedPlatforms.length > 0 && (title || caption)),
-  }), [clientId, selectedPlatforms, title, caption, mediaUrl, thumbnailUrl, timingMode, scheduleDate, scheduleTime]);
-
-  // Pre-flight Validation Checklist
-  const validationItems = useMemo(() => {
-    const items = [];
-    if (!clientId) items.push({ type: "error", msg: "Client selection is required" });
-    if (selectedPlatforms.length === 0) items.push({ type: "error", msg: "At least one target platform must be selected" });
-    if (!title.trim() && !caption.trim()) items.push({ type: "warning", msg: "Adding a Title or Caption is recommended for post reach" });
-    if (selectedPlatforms.includes("youtube") && !title.trim()) items.push({ type: "error", msg: "YouTube requires a Post Title" });
-    if (!mediaUrl && !thumbnailUrl) items.push({ type: "warning", msg: "No media file uploaded. Post will be text-only" });
-    if (contentType === "video" && !thumbnailUrl) items.push({ type: "warning", msg: "Custom cover thumbnail is recommended for video posts" });
-    return items;
-  }, [clientId, selectedPlatforms, title, caption, mediaUrl, thumbnailUrl, contentType]);
-
-  // Switch to section via Tab Navigation
-  const scrollToSection = (secId) => {
-    setActiveTab(secId);
-  };
-
-  const toggleAccordion = (secId) => {
-    setExpandedSections((prev) => ({ ...prev, [secId]: !prev[secId] }));
-  };
 
   const handleRemovePlatform = (platKey) => {
     setSelectedPlatforms((prev) => prev.filter((p) => p !== platKey));
@@ -300,10 +248,10 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
   const showThumbnailOption = contentType === "video" || contentType === "reel" || selectedPlatforms.includes("youtube");
 
   return (
-    <Modal open={open} onClose={onClose} size="fullscreen">
+    <Modal open={open} onClose={onClose} size="fullscreen" hideHeader>
       <div style={{ display: "flex", flexDirection: "column", height: "calc(90vh - 70px)", background: "#FAFAFA", borderRadius: 0, overflow: "hidden", margin: "-24px" }}>
         
-        {/* ── TOP HEADER & SECTION NAVIGATION ─────────────────────── */}
+        {/* ── TOP HEADER & WORKSPACE TAB NAVIGATION ─────────────────── */}
         <div style={{ background: "#FFFFFF", borderBottom: "1px solid #E2E8F0", padding: "14px 24px 0", flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <div>
@@ -314,55 +262,67 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                 Create & Publish Post
               </h2>
               <p style={{ fontSize: 12, color: "#64748B", margin: "2px 0 0" }}>
-                Select client, content format, targets, and media to post now or schedule.
+                Select client, content format, media, and schedule settings for your post.
               </p>
             </div>
 
-            <button onClick={onClose} style={{ background: "#F1F5F9", border: "none", cursor: "pointer", padding: "6px 10px", borderRadius: 8, color: "#64748B", fontSize: 13, fontWeight: 700 }}>
-              ✕ Close
+            {/* Clean top-right X close icon button only */}
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close modal"
+              style={{
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                padding: "6px",
+                borderRadius: "50%",
+                color: "#64748B",
+                fontSize: 16,
+                lineHeight: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "#F1F5F9"; e.currentTarget.style.color = "#0F172A"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#64748B"; }}
+            >
+              ✕
             </button>
           </div>
 
-          {/* Horizontal Section Navigation Bar (Non-wizard tabs) */}
+          {/* Clean Horizontal Workspace Tabs (Figma / VS Code editor tab style) */}
           <div style={{ display: "flex", gap: 24, borderTop: "1px solid #F1F5F9", paddingTop: 10 }}>
-            {SECTIONS.map((sec) => {
-              const isActive = activeTab === sec.id;
-              const isCompleted = completionStatus[sec.id];
+            {WORKSPACES.map((ws) => {
+              const isActive = activeTab === ws.id;
               return (
                 <button
-                  key={sec.id}
+                  key={ws.id}
                   type="button"
-                  onClick={() => scrollToSection(sec.id)}
+                  onClick={() => setActiveTab(ws.id)}
                   style={{
                     padding: "8px 4px 12px",
                     background: "none",
                     border: "none",
                     borderBottom: isActive ? "2.5px solid #FF6A00" : "2.5px solid transparent",
-                    color: isActive ? "#FF6A00" : isCompleted ? "#0F172A" : "#64748B",
-                    fontSize: 13,
-                    fontWeight: isActive || isCompleted ? 700 : 500,
+                    color: isActive ? "#0F172A" : "#64748B",
+                    fontSize: 13.5,
+                    fontWeight: isActive ? 700 : 500,
                     cursor: "pointer",
                     display: "flex",
                     alignItems: "center",
                     gap: 6,
                     transition: "all 0.15s ease",
                   }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) e.currentTarget.style.color = "#0F172A";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) e.currentTarget.style.color = "#64748B";
+                  }}
                 >
-                  <span style={{
-                    width: 18,
-                    height: 18,
-                    borderRadius: "50%",
-                    background: isActive ? "#FF6A00" : isCompleted ? "#DCFCE7" : "#F1F5F9",
-                    color: isActive ? "#FFF" : isCompleted ? "#166534" : "#64748B",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 10,
-                    fontWeight: 800,
-                  }}>
-                    {isCompleted && !isActive ? "✓" : <SvgIcon name={sec.icon} size={10} color={isActive ? "#FFF" : "#64748B"} />}
-                  </span>
-                  {sec.label}
+                  {ws.label}
                 </button>
               );
             })}
@@ -372,11 +332,11 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
         {/* ── MAIN BODY: 68% FORM / 32% LIVE PREVIEW PANEL ─────────── */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 390px", flex: 1, minHeight: 0 }}>
           
-          {/* LEFT FORM COLUMN (Scrollable — shows only active tab's fields) */}
+          {/* LEFT FORM COLUMN (Shows only active tab's workspace) */}
           <div ref={formContainerRef} style={{ overflowY: "auto", padding: "24px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
             
-            {/* ── BASIC DETAILS TAB ────────────────────────── */}
-            {activeTab === "basic" && (
+            {/* ── 1. POST DETAILS WORKSPACE ────────────────────── */}
+            {activeTab === "post_details" && (
               <>
                 {/* Client Select */}
                 <div>
@@ -435,7 +395,7 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                 <div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                     <label style={{ fontSize: 12.5, fontWeight: 700, color: "#334155", margin: 0 }}>
-                      Target Platforms (Auto-matched)
+                      Target Platforms & Connected Accounts
                     </label>
                     {loadingSocial && <span style={{ fontSize: 11, color: "#94A3B8" }}>Checking connections...</span>}
                   </div>
@@ -478,12 +438,7 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                     </div>
                   )}
                 </div>
-              </>
-            )}
 
-            {/* ── CONTENT & CAPTION TAB ────────────────────── */}
-            {activeTab === "content" && (
-              <>
                 {/* Post Title */}
                 <div>
                   <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: "#334155", marginBottom: 6 }}>
@@ -543,7 +498,7 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
               </>
             )}
 
-            {/* ── MEDIA & THUMBNAIL TAB ────────────────────── */}
+            {/* ── 2. MEDIA WORKSPACE ─────────────────────────── */}
             {activeTab === "media" && (
               <>
                 {/* Primary Media Drag & Drop */}
@@ -559,33 +514,44 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                       border: dragMediaOver ? "2px dashed #FF6A00" : "1.5px dashed #CBD5E1",
                       background: dragMediaOver ? "#FFF7ED" : "#F8FAFC",
                       borderRadius: 10,
-                      padding: 16,
+                      padding: 20,
                       textAlign: "center",
                       cursor: "pointer",
                       transition: "all 0.15s ease",
                     }}
                   >
                     {mediaUrl ? (
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", padding: "8px 12px", borderRadius: 8, border: "1px solid #E2E8F0" }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", truncate: true }}>
-                          📁 {mediaFileName || "Uploaded Media File"}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", padding: "10px 14px", borderRadius: 8, border: "1px solid #E2E8F0" }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 700, color: "#0F172A", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          📁 {mediaFileName || mediaUrl.split("/").pop() || "Uploaded Media File"}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => setMediaUrl("")}
-                          style={{ border: "none", background: "#F1F5F9", color: "#EF4444", borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}
-                        >
-                          Remove
-                        </button>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <label style={{ cursor: "pointer", background: "#EFF6FF", color: "#2563EB", borderRadius: 4, padding: "3px 8px", fontSize: 11, fontWeight: 700 }}>
+                            Replace
+                            <input
+                              type="file"
+                              accept="video/*,image/*"
+                              onChange={(e) => processUpload(e.target.files?.[0], "media")}
+                              style={{ display: "none" }}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setMediaUrl("")}
+                            style={{ border: "none", background: "#FEF2F2", color: "#EF4444", borderRadius: 4, padding: "3px 8px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}
+                          >
+                            Remove
+                          </button>
+                        </div>
                       </div>
                     ) : (
                       <label style={{ cursor: "pointer", display: "block" }}>
-                        <div style={{ fontSize: 24, marginBottom: 4 }}>☁️</div>
-                        <div style={{ fontSize: 12.5, fontWeight: 700, color: "#334155" }}>
+                        <div style={{ fontSize: 28, marginBottom: 6 }}>☁️</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#334155" }}>
                           Drag & drop video or image file here
                         </div>
-                        <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>
-                          or click to browse files
+                        <div style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 4 }}>
+                          or click to browse files from your computer
                         </div>
                         <input
                           type="file"
@@ -595,7 +561,7 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                         />
                       </label>
                     )}
-                    {uploadingMedia && <span style={{ fontSize: 11, color: "#FF6A00", marginTop: 6, display: "block" }}>Uploading media file...</span>}
+                    {uploadingMedia && <span style={{ fontSize: 11.5, color: "#FF6A00", marginTop: 8, display: "block", fontWeight: 600 }}>Uploading media file...</span>}
                   </div>
 
                   <input
@@ -610,7 +576,7 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
 
                 {/* Conditional Custom Cover Thumbnail */}
                 {showThumbnailOption && (
-                  <div style={{ paddingTop: 12, borderTop: "1px dashed #E2E8F0" }}>
+                  <div style={{ paddingTop: 16, borderTop: "1px dashed #E2E8F0" }}>
                     <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: "#334155", marginBottom: 6 }}>
                       Custom Cover Thumbnail Image (Optional)
                     </label>
@@ -622,28 +588,39 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                         border: dragThumbOver ? "2px dashed #FF6A00" : "1.5px dashed #CBD5E1",
                         background: dragThumbOver ? "#FFF7ED" : "#F8FAFC",
                         borderRadius: 10,
-                        padding: 14,
+                        padding: 16,
                         textAlign: "center",
                         cursor: "pointer",
                       }}
                     >
                       {thumbnailUrl ? (
                         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", padding: "8px 12px", borderRadius: 8, border: "1px solid #E2E8F0" }}>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: "#0F172A" }}>
-                            🖼️ {thumbnailFileName || "Uploaded Thumbnail"}
+                          <span style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            🖼️ {thumbnailFileName || thumbnailUrl.split("/").pop() || "Uploaded Thumbnail"}
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => setThumbnailUrl("")}
-                            style={{ border: "none", background: "#F1F5F9", color: "#EF4444", borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}
-                          >
-                            Remove
-                          </button>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <label style={{ cursor: "pointer", background: "#EFF6FF", color: "#2563EB", borderRadius: 4, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>
+                              Replace
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => processUpload(e.target.files?.[0], "thumbnail")}
+                                style={{ display: "none" }}
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setThumbnailUrl("")}
+                              style={{ border: "none", background: "#FEF2F2", color: "#EF4444", borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}
+                            >
+                              Remove
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <label style={{ cursor: "pointer", display: "block" }}>
-                          <div style={{ fontSize: 18, marginBottom: 2 }}>🖼️</div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: "#334155" }}>
+                          <div style={{ fontSize: 20, marginBottom: 4 }}>🖼️</div>
+                          <div style={{ fontSize: 12.5, fontWeight: 700, color: "#334155" }}>
                             Upload custom thumbnail image
                           </div>
                           <input
@@ -654,7 +631,7 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                           />
                         </label>
                       )}
-                      {uploadingThumbnail && <span style={{ fontSize: 11, color: "#FF6A00", marginTop: 4, display: "block" }}>Uploading thumbnail...</span>}
+                      {uploadingThumbnail && <span style={{ fontSize: 11, color: "#FF6A00", marginTop: 4, display: "block", fontWeight: 600 }}>Uploading thumbnail...</span>}
                     </div>
 
                     <input
@@ -670,11 +647,11 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
               </>
             )}
 
-            {/* ── PUBLISHING SCHEDULE TAB ──────────────────── */}
+            {/* ── 3. PUBLISHING WORKSPACE ────────────────────── */}
             {activeTab === "publishing" && (
               <>
                 <div style={{ display: "flex", gap: 12 }}>
-                  <label style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: 8, background: timingMode === "post_now" ? "#EFF6FF" : "#FFF", border: timingMode === "post_now" ? "2px solid #2563EB" : "1px solid #E2E8F0", cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: timingMode === "post_now" ? "#1D4ED8" : "#334155" }}>
+                  <label style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "12px 14px", borderRadius: 8, background: timingMode === "post_now" ? "#EFF6FF" : "#FFF", border: timingMode === "post_now" ? "2px solid #2563EB" : "1px solid #E2E8F0", cursor: "pointer", fontSize: 13, fontWeight: 700, color: timingMode === "post_now" ? "#1D4ED8" : "#334155" }}>
                     <input
                       type="radio"
                       name="timing"
@@ -682,10 +659,10 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                       checked={timingMode === "post_now"}
                       onChange={() => setTimingMode("post_now")}
                     />
-                    ⚡ Post Now (Immediate)
+                    ⚡ Publish Now (Immediate)
                   </label>
 
-                  <label style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: 8, background: timingMode === "schedule" ? "#FFF7ED" : "#FFF", border: timingMode === "schedule" ? "2px solid #FF6A00" : "1px solid #E2E8F0", cursor: "pointer", fontSize: 12.5, fontWeight: 700, color: timingMode === "schedule" ? "#FF6A00" : "#334155" }}>
+                  <label style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "12px 14px", borderRadius: 8, background: timingMode === "schedule" ? "#FFF7ED" : "#FFF", border: timingMode === "schedule" ? "2px solid #FF6A00" : "1px solid #E2E8F0", cursor: "pointer", fontSize: 13, fontWeight: 700, color: timingMode === "schedule" ? "#FF6A00" : "#334155" }}>
                     <input
                       type="radio"
                       name="timing"
@@ -697,84 +674,48 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                   </label>
                 </div>
 
-                {/* Animate in Date & Time when Schedule is selected */}
                 {timingMode === "schedule" && (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, paddingTop: 10, borderTop: "1px dashed #E2E8F0" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, paddingTop: 14, borderTop: "1px dashed #E2E8F0" }}>
                     <div>
-                      <label style={{ fontSize: 11.5, fontWeight: 700, color: "#64748B", display: "block", marginBottom: 4 }}>
-                        Publish Date
+                      <label style={{ fontSize: 12, fontWeight: 700, color: "#334155", display: "block", marginBottom: 6 }}>
+                        Publish Date *
                       </label>
                       <input
                         type="date"
                         className="form-input"
                         value={scheduleDate}
                         onChange={(e) => setScheduleDate(e.target.value)}
-                        style={{ fontSize: 12.5, width: "100%" }}
+                        style={{ fontSize: 13, width: "100%", padding: "8px 12px", borderRadius: 8 }}
                       />
                     </div>
 
                     <div>
-                      <label style={{ fontSize: 11.5, fontWeight: 700, color: "#64748B", display: "block", marginBottom: 4 }}>
-                        Publish Time (Default: 6:00 PM)
+                      <label style={{ fontSize: 12, fontWeight: 700, color: "#334155", display: "block", marginBottom: 6 }}>
+                        Publish Time (Default: 6:00 PM) *
                       </label>
                       <input
                         type="time"
                         className="form-input"
                         value={scheduleTime}
                         onChange={(e) => setScheduleTime(e.target.value)}
-                        style={{ fontSize: 12.5, width: "100%" }}
+                        style={{ fontSize: 13, width: "100%", padding: "8px 12px", borderRadius: 8 }}
                       />
                     </div>
                   </div>
                 )}
-              </>
-            )}
 
-            {/* ── REVIEW & PRE-FLIGHT TAB ──────────────────── */}
-            {activeTab === "review" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {validationItems.length === 0 ? (
-                  <div style={{ padding: "12px 14px", borderRadius: 8, background: "#F0FDF4", border: "1px solid #BBF7D0", color: "#166534", fontSize: 12.5, fontWeight: 700 }}>
-                    ✓ All pre-flight checks passed! Post is ready to be published.
+                {/* Platform-specific & Timezone Settings */}
+                <div style={{ background: "#F8FAFC", borderRadius: 10, border: "1px solid #E2E8F0", padding: 14, marginTop: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", marginBottom: 6 }}>
+                    🌐 Publishing Details & Timezone
                   </div>
-                ) : (
-                  validationItems.map((item, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        padding: "10px 12px",
-                        borderRadius: 8,
-                        background: item.type === "error" ? "#FEF2F2" : "#FFFBEB",
-                        border: `1px solid ${item.type === "error" ? "#FCA5A5" : "#FDE68A"}`,
-                        color: item.type === "error" ? "#991B1B" : "#92400E",
-                        fontSize: 12,
-                        fontWeight: 600,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                      }}
-                    >
-                      <span>{item.type === "error" ? "❌" : "⚠️"}</span>
-                      <span>{item.msg}</span>
-                    </div>
-                  ))
-                )}
-
-                {/* Review Summary */}
-                <div style={{ marginTop: 8, background: "#FFFFFF", borderRadius: 10, border: "1px solid #E2E8F0", padding: 16 }}>
-                  <h4 style={{ fontSize: 13, fontWeight: 800, color: "#0F172A", margin: "0 0 12px" }}>Post Summary</h4>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, fontSize: 12 }}>
-                    <div><span style={{ color: "#64748B", fontWeight: 600 }}>Client:</span> <span style={{ fontWeight: 700, color: "#0F172A" }}>{selectedClient?.companyName || "—"}</span></div>
-                    <div><span style={{ color: "#64748B", fontWeight: 600 }}>Format:</span> <span style={{ fontWeight: 700, color: "#0F172A", textTransform: "capitalize" }}>{contentType}</span></div>
-                    <div><span style={{ color: "#64748B", fontWeight: 600 }}>Platforms:</span> <span style={{ fontWeight: 700, color: "#0F172A" }}>{selectedPlatforms.length > 0 ? selectedPlatforms.map(p => PLATFORM_MAP[p]?.name || p).join(", ") : "—"}</span></div>
-                    <div><span style={{ color: "#64748B", fontWeight: 600 }}>Timing:</span> <span style={{ fontWeight: 700, color: "#0F172A" }}>{timingMode === "post_now" ? "Immediate" : `${scheduleDate} @ ${scheduleTime}`}</span></div>
-                    <div style={{ gridColumn: "1 / -1" }}><span style={{ color: "#64748B", fontWeight: 600 }}>Title:</span> <span style={{ fontWeight: 700, color: "#0F172A" }}>{title || "—"}</span></div>
-                    <div style={{ gridColumn: "1 / -1" }}><span style={{ color: "#64748B", fontWeight: 600 }}>Caption:</span> <span style={{ fontWeight: 600, color: "#334155" }}>{caption ? (caption.length > 120 ? caption.slice(0, 120) + "..." : caption) : "—"}</span></div>
-                    <div><span style={{ color: "#64748B", fontWeight: 600 }}>Media:</span> <span style={{ fontWeight: 700, color: mediaUrl ? "#16A34A" : "#94A3B8" }}>{mediaUrl ? "✓ Uploaded" : "None"}</span></div>
-                    <div><span style={{ color: "#64748B", fontWeight: 600 }}>Thumbnail:</span> <span style={{ fontWeight: 700, color: thumbnailUrl ? "#16A34A" : "#94A3B8" }}>{thumbnailUrl ? "✓ Uploaded" : "None"}</span></div>
+                  <div style={{ fontSize: 11.5, color: "#64748B", lineHeight: 1.5 }}>
+                    <div>• <strong>Timezone:</strong> System Local Time ({Intl.DateTimeFormat().resolvedOptions().timeZone})</div>
+                    <div>• <strong>Platforms:</strong> {selectedPlatforms.length > 0 ? selectedPlatforms.map(p => PLATFORM_MAP[p]?.name || p).join(", ") : "No platforms selected"}</div>
+                    <div>• <strong>Mode:</strong> {timingMode === "post_now" ? "Immediate queue trigger" : `Scheduled for ${scheduleDate} at ${scheduleTime}`}</div>
                   </div>
                 </div>
-              </div>
+              </>
             )}
 
           </div>

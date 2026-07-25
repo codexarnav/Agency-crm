@@ -262,18 +262,21 @@ function EmptyState({ icon, title, desc, action }) {
 }
 
 // Modal
-function Modal({ open, onClose, title, children, footer, size = "" }) {
+function Modal({ open, onClose, title, hideHeader = false, children, footer, size = "" }) {
   if (!open) return null;
   const sizeClass = size === "lg" ? "modal-lg" : size === "fullscreen" ? "modal-fullscreen" : "";
+  const shouldShowHeader = !hideHeader && (title !== undefined ? Boolean(title) : true);
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className={`modal-box ${sizeClass}`}>
-        <div className="modal-header">
-          <h3 className="modal-title">{title}</h3>
-          <button className="btn btn-ghost btn-icon btn-sm" onClick={onClose}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
-          </button>
-        </div>
+        {shouldShowHeader && (
+          <div className="modal-header">
+            <h3 className="modal-title">{title}</h3>
+            <button className="btn btn-ghost btn-icon btn-sm" onClick={onClose}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+            </button>
+          </div>
+        )}
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-footer">{footer}</div>}
       </div>
