@@ -653,6 +653,8 @@ model PublishingJob {
 
   platform String
 
+  title String?
+
   caption String?
 
   mediaUrls String

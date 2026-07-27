@@ -71,7 +71,7 @@ async function processSingleJob(job) {
     }
 
     // Format post body
-    let postBody = pubJob.caption || (pubJob.task ? pubJob.task.title : (pubJob.shoot ? pubJob.shoot.title : ""));
+    let postBody = pubJob.caption || pubJob.title || (pubJob.task ? pubJob.task.title : (pubJob.shoot ? pubJob.shoot.title : ""));
 
     let externalPostId = null;
 
@@ -115,7 +115,7 @@ async function processSingleJob(job) {
     }
 
     // Notify manager and employee
-    const itemTitle = pubJob.task ? pubJob.task.title : (pubJob.shoot ? pubJob.shoot.title : "Content");
+    const itemTitle = pubJob.title || (pubJob.task ? pubJob.task.title : (pubJob.shoot ? pubJob.shoot.title : "Content"));
     
     // Notify manager
     await createNotification({

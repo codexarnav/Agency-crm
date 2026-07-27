@@ -236,7 +236,7 @@ export default function PublishingQueue() {
                         <tbody>
                             {queue.map((job) => {
                                 const scheduledDate = new Date(job.scheduledAt);
-                                const sourceTitle = job.task ? job.task.title : (job.shoot ? job.shoot.title : "Direct Schedule");
+                                const sourceTitle = job.title || (job.task ? job.task.title : (job.shoot ? job.shoot.title : "Direct Schedule"));
                                 return (
                                     <tr key={job.id} style={{ borderBottom: "1px solid var(--border)", verticalAlign: "middle" }}>
                                         <td style={{ padding: 12 }}>

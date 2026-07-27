@@ -370,10 +370,10 @@ export default function PublishingCalendar() {
                                     </div>
 
                                     {/* Jobs render */}
-                                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                                     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                                         {dayJobs.map(job => {
                                             const colors = statusColor(job.status);
-                                            const title = job.task ? job.task.title : (job.shoot ? job.shoot.title : "Direct Schedule");
+                                            const title = job.title || (job.task ? job.task.title : (job.shoot ? job.shoot.title : "Direct Schedule"));
                                             return (
                                                 <div
                                                     key={job.id}

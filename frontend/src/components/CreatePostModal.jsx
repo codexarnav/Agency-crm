@@ -29,18 +29,16 @@ const CONTENT_TYPE_PLATFORMS = {
   story: ["instagram", "facebook"],
 };
 
-// ── Navigation Workspaces ──────────────────────────────────────────
+// ── Navigation Workspaces (Single Workspace workflow) ────────────
 const WORKSPACES = [
   { id: "post_details", label: "Post Details" },
-  { id: "media", label: "Media" },
-  { id: "publishing", label: "Publishing" },
 ];
 
 export default function CreatePostModal({ open, onClose, onSuccess }) {
   const { clients, showToast } = useApp();
 
-  // Active workspace tab
-  const [activeTab, setActiveTab] = useState("post_details");
+  // Active workspace tab (Only Post Details)
+  const activeTab = "post_details";
 
   // Form State
   const [clientId, setClientId] = useState("");
@@ -53,6 +51,7 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
   const [caption, setCaption] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
 
+  // Media & Thumbnail State (Managed directly inside interactive preview)
   const [mediaUrl, setMediaUrl] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState("");
   const [mediaFileName, setMediaFileName] = useState("");
@@ -61,17 +60,36 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
   const [uploadingThumbnail, setUploadingThumbnail] = useState(false);
   const [dragMediaOver, setDragMediaOver] = useState(false);
   const [dragThumbOver, setDragThumbOver] = useState(false);
+  const [showUrlInput, setShowUrlInput] = useState(false);
 
   // Timing state
   const [timingMode, setTimingMode] = useState("schedule"); // "post_now" | "schedule"
   const [scheduleDate, setScheduleDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [scheduleTime, setScheduleTime] = useState("18:00"); // Default 6:00 PM
 
-  // Preview State
-  const [previewTab, setPreviewTab] = useState("cover");
+  // Preview State (cover = Thumbnail, video = Media View)
+  const [previewTab, setPreviewTab] = useState("video");
   const [submitting, setSubmitting] = useState(false);
 
-  const formContainerRef = useRef(null);
+  // UI Dropdown & Popover states
+  const [publishDropdownOpen, setPublishDropdownOpen] = useState(false);
+  const [schedulePopoverOpen, setSchedulePopoverOpen] = useState(false);
+
+  const mediaFileInputRef = useRef(null);
+  const thumbnailFileInputRef = useRef(null);
+  const publishContainerRef = useRef(null);
+
+  // Close popovers on outside click
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (publishContainerRef.current && !publishContainerRef.current.contains(e.target)) {
+        setPublishDropdownOpen(false);
+        setSchedulePopoverOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Default client selection on open
   useEffect(() => {
@@ -82,6 +100,9 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
       const today = new Date().toISOString().split("T")[0];
       setScheduleDate(today);
       setScheduleTime("18:00");
+      setTimingMode("schedule");
+      setPublishDropdownOpen(false);
+      setSchedulePopoverOpen(false);
     }
   }, [open, clients]);
 
@@ -101,7 +122,7 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
         const data = res.data || res;
         setSocialStatus(data);
       })
-      .catch((err) => {
+      .catch(() => {
         if (!isMounted) return;
         setSocialStatus({ connectedPlatforms: [] });
       })
@@ -167,9 +188,10 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
     }
   };
 
-  // Drag & Drop event handlers
+  // Drag & Drop event handlers for Interactive Preview Surface
   const handleDrop = (e, type) => {
     e.preventDefault();
+    e.stopPropagation();
     if (type === "media") setDragMediaOver(false);
     else setDragThumbOver(false);
 
@@ -192,8 +214,8 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
   };
 
   // Submit Handler
-  const handleSubmit = async (e) => {
-    if (e) e.preventDefault();
+  const handleSubmit = async (overrideMode = null) => {
+    const activeMode = overrideMode || timingMode;
     if (!clientId) {
       showToast("Please select a client", "danger");
       return;
@@ -210,7 +232,7 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
     try {
       setSubmitting(true);
       let scheduledAt = null;
-      if (timingMode === "schedule") {
+      if (activeMode === "schedule") {
         scheduledAt = new Date(`${scheduleDate}T${scheduleTime}:00`).toISOString();
       }
 
@@ -223,12 +245,12 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
         mediaUrls: mediaUrl ? [mediaUrl] : [],
         thumbnailUrl: thumbnailUrl || null,
         scheduledAt,
-        postNow: timingMode === "post_now",
+        postNow: activeMode === "post_now",
       };
 
       await schedulePost(payload);
       showToast(
-        timingMode === "post_now"
+        activeMode === "post_now"
           ? "Post submitted and processing for immediate publishing!"
           : `Post scheduled successfully for ${scheduleDate} at ${scheduleTime}!`,
         "success"
@@ -245,13 +267,27 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
 
   if (!open) return null;
 
-  const showThumbnailOption = contentType === "video" || contentType === "reel" || selectedPlatforms.includes("youtube");
-
   return (
     <Modal open={open} onClose={onClose} size="fullscreen" hideHeader>
       <div style={{ display: "flex", flexDirection: "column", height: "calc(90vh - 70px)", background: "#FAFAFA", borderRadius: 0, overflow: "hidden", margin: "-24px" }}>
         
-        {/* ── TOP HEADER & WORKSPACE TAB NAVIGATION ─────────────────── */}
+        {/* Hidden File Inputs for Interactive Preview */}
+        <input
+          type="file"
+          ref={mediaFileInputRef}
+          accept="video/*,image/*"
+          onChange={(e) => processUpload(e.target.files?.[0], "media")}
+          style={{ display: "none" }}
+        />
+        <input
+          type="file"
+          ref={thumbnailFileInputRef}
+          accept="image/*"
+          onChange={(e) => processUpload(e.target.files?.[0], "thumbnail")}
+          style={{ display: "none" }}
+        />
+
+        {/* ── TOP HEADER & WORKSPACE NAVIGATION ─────────────────── */}
         <div style={{ background: "#FFFFFF", borderBottom: "1px solid #E2E8F0", padding: "14px 24px 0", flexShrink: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <div>
@@ -262,11 +298,11 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                 Create & Publish Post
               </h2>
               <p style={{ fontSize: 12, color: "#64748B", margin: "2px 0 0" }}>
-                Select client, content format, media, and schedule settings for your post.
+                Select client, content format, metadata, and schedule settings for your post.
               </p>
             </div>
 
-            {/* Clean top-right X close icon button only */}
+            {/* Close button */}
             <button
               type="button"
               onClick={onClose}
@@ -292,7 +328,7 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
             </button>
           </div>
 
-          {/* Clean Horizontal Workspace Tabs (Figma / VS Code editor tab style) */}
+          {/* Navigation Bar (Post Details ONLY) */}
           <div style={{ display: "flex", gap: 24, borderTop: "1px solid #F1F5F9", paddingTop: 10 }}>
             {WORKSPACES.map((ws) => {
               const isActive = activeTab === ws.id;
@@ -300,7 +336,6 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                 <button
                   key={ws.id}
                   type="button"
-                  onClick={() => setActiveTab(ws.id)}
                   style={{
                     padding: "8px 4px 12px",
                     background: "none",
@@ -313,13 +348,6 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                     display: "flex",
                     alignItems: "center",
                     gap: 6,
-                    transition: "all 0.15s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) e.currentTarget.style.color = "#0F172A";
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) e.currentTarget.style.color = "#64748B";
                   }}
                 >
                   {ws.label}
@@ -329,399 +357,176 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
           </div>
         </div>
 
-        {/* ── MAIN BODY: 68% FORM / 32% LIVE PREVIEW PANEL ─────────── */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 390px", flex: 1, minHeight: 0 }}>
+        {/* ── MAIN BODY: LEFT FORM / RIGHT INTERACTIVE PREVIEW PANEL ─── */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 410px", flex: 1, minHeight: 0 }}>
           
-          {/* LEFT FORM COLUMN (Shows only active tab's workspace) */}
-          <div ref={formContainerRef} style={{ overflowY: "auto", padding: "24px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
+          {/* LEFT FORM COLUMN (Post Details Metadata & Copywriting Only) */}
+          <div style={{ overflowY: "auto", padding: "24px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
             
-            {/* ── 1. POST DETAILS WORKSPACE ────────────────────── */}
-            {activeTab === "post_details" && (
-              <>
-                {/* Client Select */}
-                <div>
-                  <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: "#334155", marginBottom: 6 }}>
-                    Select Client *
-                  </label>
-                  <select
-                    className="form-input"
-                    value={clientId}
-                    onChange={(e) => setClientId(e.target.value)}
-                    style={{ width: "100%", fontSize: 13, fontWeight: 600, padding: "9px 12px", borderRadius: 8 }}
-                    required
-                  >
-                    <option value="">-- Choose Client --</option>
-                    {clients.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.companyName || c.brandName || c.name} {c.brandName ? `(${c.brandName})` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+            {/* Client Select */}
+            <div>
+              <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: "#334155", marginBottom: 6 }}>
+                Select Client *
+              </label>
+              <select
+                className="form-input"
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+                style={{ width: "100%", fontSize: 13, fontWeight: 600, padding: "9px 12px", borderRadius: 8 }}
+                required
+              >
+                <option value="">-- Choose Client --</option>
+                {clients.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.companyName || c.brandName || c.name} {c.brandName ? `(${c.brandName})` : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-                {/* Content Type Selector */}
-                <div>
-                  <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: "#334155", marginBottom: 6 }}>
-                    Content Format *
-                  </label>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-                    {CONTENT_TYPES.map((ct) => {
-                      const active = contentType === ct.id;
-                      return (
-                        <button
-                          key={ct.id}
-                          type="button"
-                          onClick={() => setContentType(ct.id)}
-                          style={{
-                            padding: "10px",
-                            borderRadius: 8,
-                            border: active ? "2px solid #FF6A00" : "1px solid #E2E8F0",
-                            background: active ? "#FFF7ED" : "#FFFFFF",
-                            color: active ? "#FF6A00" : "#334155",
-                            textAlign: "center",
-                            cursor: "pointer",
-                            transition: "all 0.15s ease",
-                          }}
-                        >
-                          <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 2 }}>{ct.label}</div>
-                          <div style={{ fontSize: 10.5, opacity: 0.75 }}>{ct.desc}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Target Platforms */}
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                    <label style={{ fontSize: 12.5, fontWeight: 700, color: "#334155", margin: 0 }}>
-                      Target Platforms & Connected Accounts
-                    </label>
-                    {loadingSocial && <span style={{ fontSize: 11, color: "#94A3B8" }}>Checking connections...</span>}
-                  </div>
-
-                  {selectedPlatforms.length === 0 ? (
-                    <div style={{ padding: "10px 12px", borderRadius: 8, background: "#FEF2F2", border: "1px dashed #FCA5A5", color: "#991B1B", fontSize: 12 }}>
-                      ⚠️ No connected social accounts found for {contentType.toUpperCase()} on this client. Please connect accounts in Client Management.
-                    </div>
-                  ) : (
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {selectedPlatforms.map((pKey) => {
-                        const pInfo = PLATFORM_MAP[pKey] || { name: pKey, color: "#333", bg: "#F3F4F6" };
-                        return (
-                          <div
-                            key={pKey}
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 6,
-                              padding: "5px 10px",
-                              borderRadius: 16,
-                              background: pInfo.bg,
-                              border: `1px solid ${pInfo.color}40`,
-                              fontSize: 12,
-                              fontWeight: 700,
-                              color: pInfo.color,
-                            }}
-                          >
-                            <span>{pInfo.name}</span>
-                            <button
-                              type="button"
-                              onClick={() => handleRemovePlatform(pKey)}
-                              style={{ border: "none", background: "transparent", color: pInfo.color, cursor: "pointer", fontSize: 11, fontWeight: 800, padding: "0 2px" }}
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Post Title */}
-                <div>
-                  <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: "#334155", marginBottom: 6 }}>
-                    Post Title / Headline
-                  </label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Enter engaging title or headline..."
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    style={{ width: "100%", fontSize: 13, padding: "8px 12px", borderRadius: 8 }}
-                  />
-                </div>
-
-                {/* Caption Textarea & AI Assist */}
-                <div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                    <label style={{ fontSize: 12.5, fontWeight: 700, color: "#334155", margin: 0 }}>
-                      Caption & Copywriting
-                    </label>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontSize: 11, color: "#94A3B8" }}>{caption.length} characters</span>
-                      <button
-                        type="button"
-                        onClick={handleAiAssist}
-                        disabled={aiLoading}
-                        style={{
-                          padding: "4px 10px",
-                          borderRadius: 6,
-                          border: "1px solid #C084FC",
-                          background: "#F3E8FF",
-                          color: "#7E22CE",
-                          fontSize: 11.5,
-                          fontWeight: 700,
-                          cursor: "pointer",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 4,
-                        }}
-                      >
-                        {aiLoading ? "Generating..." : "✨ AI Assist"}
-                      </button>
-                    </div>
-                  </div>
-
-                  <textarea
-                    className="form-input"
-                    rows={6}
-                    placeholder="Write your post caption, tags, and call-to-action..."
-                    value={caption}
-                    onChange={(e) => setCaption(e.target.value)}
-                    style={{ width: "100%", fontSize: 13, resize: "vertical", padding: "10px 12px", borderRadius: 8, lineHeight: 1.5 }}
-                  />
-                </div>
-              </>
-            )}
-
-            {/* ── 2. MEDIA WORKSPACE ─────────────────────────── */}
-            {activeTab === "media" && (
-              <>
-                {/* Primary Media Drag & Drop */}
-                <div>
-                  <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: "#334155", marginBottom: 6 }}>
-                    Primary Media File (Video / Photo)
-                  </label>
-                  <div
-                    onDragOver={(e) => { e.preventDefault(); setDragMediaOver(true); }}
-                    onDragLeave={() => setDragMediaOver(false)}
-                    onDrop={(e) => handleDrop(e, "media")}
-                    style={{
-                      border: dragMediaOver ? "2px dashed #FF6A00" : "1.5px dashed #CBD5E1",
-                      background: dragMediaOver ? "#FFF7ED" : "#F8FAFC",
-                      borderRadius: 10,
-                      padding: 20,
-                      textAlign: "center",
-                      cursor: "pointer",
-                      transition: "all 0.15s ease",
-                    }}
-                  >
-                    {mediaUrl ? (
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", padding: "10px 14px", borderRadius: 8, border: "1px solid #E2E8F0" }}>
-                        <span style={{ fontSize: 12.5, fontWeight: 700, color: "#0F172A", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          📁 {mediaFileName || mediaUrl.split("/").pop() || "Uploaded Media File"}
-                        </span>
-                        <div style={{ display: "flex", gap: 8 }}>
-                          <label style={{ cursor: "pointer", background: "#EFF6FF", color: "#2563EB", borderRadius: 4, padding: "3px 8px", fontSize: 11, fontWeight: 700 }}>
-                            Replace
-                            <input
-                              type="file"
-                              accept="video/*,image/*"
-                              onChange={(e) => processUpload(e.target.files?.[0], "media")}
-                              style={{ display: "none" }}
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            onClick={() => setMediaUrl("")}
-                            style={{ border: "none", background: "#FEF2F2", color: "#EF4444", borderRadius: 4, padding: "3px 8px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <label style={{ cursor: "pointer", display: "block" }}>
-                        <div style={{ fontSize: 28, marginBottom: 6 }}>☁️</div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: "#334155" }}>
-                          Drag & drop video or image file here
-                        </div>
-                        <div style={{ fontSize: 11.5, color: "#94A3B8", marginTop: 4 }}>
-                          or click to browse files from your computer
-                        </div>
-                        <input
-                          type="file"
-                          accept="video/*,image/*"
-                          onChange={(e) => processUpload(e.target.files?.[0], "media")}
-                          style={{ display: "none" }}
-                        />
-                      </label>
-                    )}
-                    {uploadingMedia && <span style={{ fontSize: 11.5, color: "#FF6A00", marginTop: 8, display: "block", fontWeight: 600 }}>Uploading media file...</span>}
-                  </div>
-
-                  <input
-                    type="url"
-                    className="form-input"
-                    placeholder="Or paste direct media URL..."
-                    value={mediaUrl}
-                    onChange={(e) => setMediaUrl(e.target.value)}
-                    style={{ fontSize: 12, marginTop: 8, width: "100%" }}
-                  />
-                </div>
-
-                {/* Conditional Custom Cover Thumbnail */}
-                {showThumbnailOption && (
-                  <div style={{ paddingTop: 16, borderTop: "1px dashed #E2E8F0" }}>
-                    <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: "#334155", marginBottom: 6 }}>
-                      Custom Cover Thumbnail Image (Optional)
-                    </label>
-                    <div
-                      onDragOver={(e) => { e.preventDefault(); setDragThumbOver(true); }}
-                      onDragLeave={() => setDragThumbOver(false)}
-                      onDrop={(e) => handleDrop(e, "thumbnail")}
+            {/* Content Format Selector */}
+            <div>
+              <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: "#334155", marginBottom: 6 }}>
+                Content Format *
+              </label>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+                {CONTENT_TYPES.map((ct) => {
+                  const active = contentType === ct.id;
+                  return (
+                    <button
+                      key={ct.id}
+                      type="button"
+                      onClick={() => setContentType(ct.id)}
                       style={{
-                        border: dragThumbOver ? "2px dashed #FF6A00" : "1.5px dashed #CBD5E1",
-                        background: dragThumbOver ? "#FFF7ED" : "#F8FAFC",
-                        borderRadius: 10,
-                        padding: 16,
+                        padding: "10px",
+                        borderRadius: 8,
+                        border: active ? "2px solid #FF6A00" : "1px solid #E2E8F0",
+                        background: active ? "#FFF7ED" : "#FFFFFF",
+                        color: active ? "#FF6A00" : "#334155",
                         textAlign: "center",
                         cursor: "pointer",
+                        transition: "all 0.15s ease",
                       }}
                     >
-                      {thumbnailUrl ? (
-                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", padding: "8px 12px", borderRadius: 8, border: "1px solid #E2E8F0" }}>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            🖼️ {thumbnailFileName || thumbnailUrl.split("/").pop() || "Uploaded Thumbnail"}
-                          </span>
-                          <div style={{ display: "flex", gap: 6 }}>
-                            <label style={{ cursor: "pointer", background: "#EFF6FF", color: "#2563EB", borderRadius: 4, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>
-                              Replace
-                              <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => processUpload(e.target.files?.[0], "thumbnail")}
-                                style={{ display: "none" }}
-                              />
-                            </label>
-                            <button
-                              type="button"
-                              onClick={() => setThumbnailUrl("")}
-                              style={{ border: "none", background: "#FEF2F2", color: "#EF4444", borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontSize: 11, fontWeight: 700 }}
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <label style={{ cursor: "pointer", display: "block" }}>
-                          <div style={{ fontSize: 20, marginBottom: 4 }}>🖼️</div>
-                          <div style={{ fontSize: 12.5, fontWeight: 700, color: "#334155" }}>
-                            Upload custom thumbnail image
-                          </div>
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => processUpload(e.target.files?.[0], "thumbnail")}
-                            style={{ display: "none" }}
-                          />
-                        </label>
-                      )}
-                      {uploadingThumbnail && <span style={{ fontSize: 11, color: "#FF6A00", marginTop: 4, display: "block", fontWeight: 600 }}>Uploading thumbnail...</span>}
-                    </div>
+                      <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 2 }}>{ct.label}</div>
+                      <div style={{ fontSize: 10.5, opacity: 0.75 }}>{ct.desc}</div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-                    <input
-                      type="url"
-                      className="form-input"
-                      placeholder="Or paste thumbnail URL..."
-                      value={thumbnailUrl}
-                      onChange={(e) => setThumbnailUrl(e.target.value)}
-                      style={{ fontSize: 12, marginTop: 8, width: "100%" }}
-                    />
-                  </div>
-                )}
-              </>
-            )}
+            {/* Target Platforms & Connected Accounts */}
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <label style={{ fontSize: 12.5, fontWeight: 700, color: "#334155", margin: 0 }}>
+                  Target Platforms & Connected Accounts
+                </label>
+                {loadingSocial && <span style={{ fontSize: 11, color: "#94A3B8" }}>Checking connections...</span>}
+              </div>
 
-            {/* ── 3. PUBLISHING WORKSPACE ────────────────────── */}
-            {activeTab === "publishing" && (
-              <>
-                <div style={{ display: "flex", gap: 12 }}>
-                  <label style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "12px 14px", borderRadius: 8, background: timingMode === "post_now" ? "#EFF6FF" : "#FFF", border: timingMode === "post_now" ? "2px solid #2563EB" : "1px solid #E2E8F0", cursor: "pointer", fontSize: 13, fontWeight: 700, color: timingMode === "post_now" ? "#1D4ED8" : "#334155" }}>
-                    <input
-                      type="radio"
-                      name="timing"
-                      value="post_now"
-                      checked={timingMode === "post_now"}
-                      onChange={() => setTimingMode("post_now")}
-                    />
-                    ⚡ Publish Now (Immediate)
-                  </label>
-
-                  <label style={{ flex: 1, display: "flex", alignItems: "center", gap: 8, padding: "12px 14px", borderRadius: 8, background: timingMode === "schedule" ? "#FFF7ED" : "#FFF", border: timingMode === "schedule" ? "2px solid #FF6A00" : "1px solid #E2E8F0", cursor: "pointer", fontSize: 13, fontWeight: 700, color: timingMode === "schedule" ? "#FF6A00" : "#334155" }}>
-                    <input
-                      type="radio"
-                      name="timing"
-                      value="schedule"
-                      checked={timingMode === "schedule"}
-                      onChange={() => setTimingMode("schedule")}
-                    />
-                    📅 Schedule for Later
-                  </label>
+              {selectedPlatforms.length === 0 ? (
+                <div style={{ padding: "10px 12px", borderRadius: 8, background: "#FEF2F2", border: "1px dashed #FCA5A5", color: "#991B1B", fontSize: 12 }}>
+                  ⚠️ No connected social accounts found for {contentType.toUpperCase()} on this client. Please connect accounts in Client Management.
                 </div>
-
-                {timingMode === "schedule" && (
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, paddingTop: 14, borderTop: "1px dashed #E2E8F0" }}>
-                    <div>
-                      <label style={{ fontSize: 12, fontWeight: 700, color: "#334155", display: "block", marginBottom: 6 }}>
-                        Publish Date *
-                      </label>
-                      <input
-                        type="date"
-                        className="form-input"
-                        value={scheduleDate}
-                        onChange={(e) => setScheduleDate(e.target.value)}
-                        style={{ fontSize: 13, width: "100%", padding: "8px 12px", borderRadius: 8 }}
-                      />
-                    </div>
-
-                    <div>
-                      <label style={{ fontSize: 12, fontWeight: 700, color: "#334155", display: "block", marginBottom: 6 }}>
-                        Publish Time (Default: 6:00 PM) *
-                      </label>
-                      <input
-                        type="time"
-                        className="form-input"
-                        value={scheduleTime}
-                        onChange={(e) => setScheduleTime(e.target.value)}
-                        style={{ fontSize: 13, width: "100%", padding: "8px 12px", borderRadius: 8 }}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Platform-specific & Timezone Settings */}
-                <div style={{ background: "#F8FAFC", borderRadius: 10, border: "1px solid #E2E8F0", padding: 14, marginTop: 8 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#0F172A", marginBottom: 6 }}>
-                    🌐 Publishing Details & Timezone
-                  </div>
-                  <div style={{ fontSize: 11.5, color: "#64748B", lineHeight: 1.5 }}>
-                    <div>• <strong>Timezone:</strong> System Local Time ({Intl.DateTimeFormat().resolvedOptions().timeZone})</div>
-                    <div>• <strong>Platforms:</strong> {selectedPlatforms.length > 0 ? selectedPlatforms.map(p => PLATFORM_MAP[p]?.name || p).join(", ") : "No platforms selected"}</div>
-                    <div>• <strong>Mode:</strong> {timingMode === "post_now" ? "Immediate queue trigger" : `Scheduled for ${scheduleDate} at ${scheduleTime}`}</div>
-                  </div>
+              ) : (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {selectedPlatforms.map((pKey) => {
+                    const pInfo = PLATFORM_MAP[pKey] || { name: pKey, color: "#333", bg: "#F3F4F6" };
+                    return (
+                      <div
+                        key={pKey}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "5px 10px",
+                          borderRadius: 16,
+                          background: pInfo.bg,
+                          border: `1px solid ${pInfo.color}40`,
+                          fontSize: 12,
+                          fontWeight: 700,
+                          color: pInfo.color,
+                        }}
+                      >
+                        <span>{pInfo.name}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePlatform(pKey)}
+                          style={{ border: "none", background: "transparent", color: pInfo.color, cursor: "pointer", fontSize: 11, fontWeight: 800, padding: "0 2px" }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
-              </>
-            )}
+              )}
+            </div>
+
+            {/* Post Title */}
+            <div>
+              <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: "#334155", marginBottom: 6 }}>
+                Post Title / Headline
+              </label>
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Enter engaging title or headline..."
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                style={{ width: "100%", fontSize: 13, padding: "8px 12px", borderRadius: 8 }}
+              />
+            </div>
+
+            {/* Caption Textarea & AI Assist (Heading changed to "Caption") */}
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <label style={{ fontSize: 12.5, fontWeight: 700, color: "#334155", margin: 0 }}>
+                  Caption
+                </label>
+
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 11, color: "#94A3B8" }}>{caption.length} characters</span>
+                  <button
+                    type="button"
+                    onClick={handleAiAssist}
+                    disabled={aiLoading}
+                    style={{
+                      padding: "4px 10px",
+                      borderRadius: 6,
+                      border: "1px solid #C084FC",
+                      background: "#F3E8FF",
+                      color: "#7E22CE",
+                      fontSize: 11.5,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 4,
+                    }}
+                  >
+                    {aiLoading ? "Generating..." : "✨ AI Assist"}
+                  </button>
+                </div>
+              </div>
+
+              <textarea
+                className="form-input"
+                rows={7}
+                placeholder="Write your post caption, tags, and call-to-action..."
+                value={caption}
+                onChange={(e) => setCaption(e.target.value)}
+                style={{ width: "100%", fontSize: 13, resize: "vertical", padding: "10px 12px", borderRadius: 8, lineHeight: 1.5 }}
+              />
+            </div>
 
           </div>
 
-          {/* RIGHT COLUMN: Live Preview Panel (Sticky 32%) */}
+          {/* RIGHT COLUMN: INTERACTIVE LIVE PREVIEW & MEDIA UPLOAD SURFACE */}
           <div style={{ background: "#F8FAFC", borderLeft: "1px solid #E2E8F0", padding: 18, overflowY: "auto", display: "flex", flexDirection: "column", gap: 14 }}>
+            
+            {/* Header with Mode Toggle */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <h3 style={{ fontSize: 13.5, fontWeight: 800, color: "#0F172A", margin: 0, display: "flex", alignItems: "center", gap: 6 }}>
                 📱 Live Post Preview
@@ -732,14 +537,16 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                   type="button"
                   onClick={() => setPreviewTab("cover")}
                   style={{
-                    padding: "3px 8px",
+                    padding: "4px 10px",
                     borderRadius: 4,
                     border: "none",
                     background: previewTab === "cover" ? "#FFF" : "transparent",
                     color: previewTab === "cover" ? "#FF6A00" : "#64748B",
-                    fontSize: 11,
+                    fontSize: 11.5,
                     fontWeight: 700,
                     cursor: "pointer",
+                    boxShadow: previewTab === "cover" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                    transition: "all 0.15s ease",
                   }}
                 >
                   Thumbnail
@@ -748,14 +555,16 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                   type="button"
                   onClick={() => setPreviewTab("video")}
                   style={{
-                    padding: "3px 8px",
+                    padding: "4px 10px",
                     borderRadius: 4,
                     border: "none",
                     background: previewTab === "video" ? "#FFF" : "transparent",
                     color: previewTab === "video" ? "#FF6A00" : "#64748B",
-                    fontSize: 11,
+                    fontSize: 11.5,
                     fontWeight: 700,
                     cursor: "pointer",
+                    boxShadow: previewTab === "video" ? "0 1px 3px rgba(0,0,0,0.08)" : "none",
+                    transition: "all 0.15s ease",
                   }}
                 >
                   Media View
@@ -763,10 +572,10 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
               </div>
             </div>
 
-            {/* Mock Social Media Preview Card */}
+            {/* Interactive Mock Social Preview Card */}
             <div style={{ background: "#FFFFFF", borderRadius: 12, boxShadow: "0 4px 16px rgba(0,0,0,0.05)", border: "1px solid #E2E8F0", overflow: "hidden" }}>
               
-              {/* Header */}
+              {/* Account Header */}
               <div style={{ padding: "10px 12px", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid #F1F5F9" }}>
                 <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg, #FF6A00, #EC4899)", color: "#FFF", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>
                   {selectedClient?.companyName ? selectedClient.companyName.charAt(0).toUpperCase() : "C"}
@@ -789,40 +598,285 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                 </div>
               </div>
 
-              {/* Media Preview Box */}
-              <div style={{ width: "100%", height: 230, background: "#0F172A", position: "relative", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {/* ── INTERACTIVE MEDIA PREVIEW SURFACE (Figma / Notion style upload) ── */}
+              <div style={{ width: "100%", position: "relative" }}>
                 {previewTab === "cover" ? (
-                  thumbnailUrl ? (
-                    <img src={thumbnailUrl} alt="Thumbnail cover preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  ) : mediaUrl && !mediaUrl.match(/\.(mp4|webm|mov)$/i) ? (
-                    <img src={mediaUrl} alt="Media preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  ) : (
-                    <div style={{ textAlign: "center", color: "#94A3B8", padding: 16 }}>
-                      <div style={{ fontSize: 26, marginBottom: 4 }}>🖼️</div>
-                      <div style={{ fontSize: 12, fontWeight: 600 }}>Custom Cover Thumbnail</div>
-                    </div>
-                  )
-                ) : (
-                  mediaUrl ? (
-                    mediaUrl.match(/\.(mp4|webm|mov)$/i) ? (
-                      <video src={mediaUrl} controls style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                  /* THUMBNAIL MODE */
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); setDragThumbOver(true); }}
+                    onDragLeave={() => setDragThumbOver(false)}
+                    onDrop={(e) => handleDrop(e, "thumbnail")}
+                    style={{
+                      width: "100%",
+                      height: 240,
+                      background: dragThumbOver ? "#FFF7ED" : "#0F172A",
+                      position: "relative",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderBottom: dragThumbOver ? "2px dashed #FF6A00" : "none",
+                      transition: "all 0.15s ease",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {thumbnailUrl ? (
+                      /* Thumbnail Loaded state with overlay actions */
+                      <div style={{ width: "100%", height: "100%", position: "relative" }} className="media-preview-hover-container">
+                        <img src={thumbnailUrl} alt="Thumbnail preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        
+                        {/* Overlay Controls */}
+                        <div style={{
+                          position: "absolute",
+                          inset: 0,
+                          background: "rgba(15, 23, 42, 0.55)",
+                          backdropFilter: "blur(2px)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 10,
+                          opacity: 0,
+                          transition: "opacity 0.2s ease",
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.opacity = 1}
+                        onMouseLeave={(e) => e.currentTarget.style.opacity = 0}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => thumbnailFileInputRef.current?.click()}
+                            style={{
+                              padding: "6px 12px",
+                              borderRadius: 6,
+                              background: "#FFFFFF",
+                              color: "#0F172A",
+                              fontSize: 11.5,
+                              fontWeight: 700,
+                              border: "none",
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                              boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+                            }}
+                          >
+                            📷 Replace Thumbnail
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setThumbnailUrl("")}
+                            style={{
+                              padding: "6px 10px",
+                              borderRadius: 6,
+                              background: "#FEF2F2",
+                              color: "#EF4444",
+                              fontSize: 11.5,
+                              fontWeight: 700,
+                              border: "1px solid #FCA5A5",
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 4,
+                            }}
+                          >
+                            🗑️ Remove
+                          </button>
+                        </div>
+                      </div>
                     ) : (
-                      <img src={mediaUrl} alt="Video fallback preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    )
-                  ) : (
-                    <div style={{ textAlign: "center", color: "#94A3B8", padding: 16 }}>
-                      <div style={{ fontSize: 26, marginBottom: 4 }}>🎬</div>
-                      <div style={{ fontSize: 12, fontWeight: 600 }}>Reel / Video Preview</div>
-                    </div>
-                  )
-                )}
+                      /* Thumbnail Upload Dropzone (Empty State) */
+                      <div
+                        onClick={() => thumbnailFileInputRef.current?.click()}
+                        style={{
+                          textAlign: "center",
+                          color: dragThumbOver ? "#FF6A00" : "#94A3B8",
+                          padding: 20,
+                          cursor: "pointer",
+                          width: "100%",
+                          height: "100%",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          border: "2px dashed rgba(255,255,255,0.2)",
+                          margin: 12,
+                          borderRadius: 8,
+                        }}
+                      >
+                        <div style={{ fontSize: 30, marginBottom: 6 }}>🖼️</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#FFFFFF" }}>
+                          {dragThumbOver ? "Drop thumbnail here" : "Click to upload thumbnail"}
+                        </div>
+                        <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>
+                          Drag & drop image file directly onto preview
+                        </div>
+                      </div>
+                    )}
 
-                <div style={{ position: "absolute", top: 8, left: 8, padding: "3px 6px", borderRadius: 4, background: "rgba(0,0,0,0.7)", color: "#FFF", fontSize: 9.5, fontWeight: 800 }}>
-                  {contentType.toUpperCase()}
-                </div>
+                    {uploadingThumbnail && (
+                      <div style={{ position: "absolute", inset: 0, background: "rgba(15,23,42,0.85)", display: "flex", alignItems: "center", justifyContent: "center", color: "#FF6A00", fontWeight: 700, fontSize: 12 }}>
+                        Uploading thumbnail...
+                      </div>
+                    )}
+
+                    <div style={{ position: "absolute", top: 8, left: 8, padding: "3px 6px", borderRadius: 4, background: "rgba(0,0,0,0.75)", color: "#FFF", fontSize: 9.5, fontWeight: 800 }}>
+                      THUMBNAIL PREVIEW
+                    </div>
+                  </div>
+                ) : (
+                  /* MEDIA VIEW MODE */
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); setDragMediaOver(true); }}
+                    onDragLeave={() => setDragMediaOver(false)}
+                    onDrop={(e) => handleDrop(e, "media")}
+                    style={{
+                      width: "100%",
+                      height: 240,
+                      background: dragMediaOver ? "#FFF7ED" : "#0F172A",
+                      position: "relative",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderBottom: dragMediaOver ? "2px dashed #FF6A00" : "none",
+                      transition: "all 0.15s ease",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {mediaUrl ? (
+                      /* Media Loaded state with hover overlay actions */
+                      <div style={{ width: "100%", height: "100%", position: "relative" }}>
+                        {mediaUrl.match(/\.(mp4|webm|mov)$/i) ? (
+                          <video src={mediaUrl} controls style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+                        ) : (
+                          <img src={mediaUrl} alt="Media preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        )}
+
+                        {/* Hover Overlay Controls */}
+                        <div style={{
+                          position: "absolute",
+                          inset: 0,
+                          background: "rgba(15, 23, 42, 0.55)",
+                          backdropFilter: "blur(2px)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 10,
+                          opacity: 0,
+                          transition: "opacity 0.2s ease",
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.opacity = 1}
+                        onMouseLeave={(e) => e.currentTarget.style.opacity = 0}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => mediaFileInputRef.current?.click()}
+                            style={{
+                              padding: "6px 12px",
+                              borderRadius: 6,
+                              background: "#FFFFFF",
+                              color: "#0F172A",
+                              fontSize: 11.5,
+                              fontWeight: 700,
+                              border: "none",
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 6,
+                              boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
+                            }}
+                          >
+                            📁 Replace Media
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setMediaUrl("")}
+                            style={{
+                              padding: "6px 10px",
+                              borderRadius: 6,
+                              background: "#FEF2F2",
+                              color: "#EF4444",
+                              fontSize: 11.5,
+                              fontWeight: 700,
+                              border: "1px solid #FCA5A5",
+                              cursor: "pointer",
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 4,
+                            }}
+                          >
+                            🗑️ Remove
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Media Upload Dropzone (Empty State) */
+                      <div
+                        onClick={() => mediaFileInputRef.current?.click()}
+                        style={{
+                          textAlign: "center",
+                          color: dragMediaOver ? "#FF6A00" : "#94A3B8",
+                          padding: 20,
+                          cursor: "pointer",
+                          width: "100%",
+                          height: "100%",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          border: "2px dashed rgba(255,255,255,0.2)",
+                          margin: 12,
+                          borderRadius: 8,
+                        }}
+                      >
+                        <div style={{ fontSize: 32, marginBottom: 6 }}>☁️</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "#FFFFFF" }}>
+                          {dragMediaOver ? "Drop video or image here" : "Click to upload media"}
+                        </div>
+                        <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>
+                          Supports MP4, MOV, PNG, JPG files
+                        </div>
+                      </div>
+                    )}
+
+                    {uploadingMedia && (
+                      <div style={{ position: "absolute", inset: 0, background: "rgba(15,23,42,0.85)", display: "flex", alignItems: "center", justifyContent: "center", color: "#FF6A00", fontWeight: 700, fontSize: 12 }}>
+                        Uploading media file...
+                      </div>
+                    )}
+
+                    <div style={{ position: "absolute", top: 8, left: 8, padding: "3px 6px", borderRadius: 4, background: "rgba(0,0,0,0.75)", color: "#FFF", fontSize: 9.5, fontWeight: 800 }}>
+                      {contentType.toUpperCase()}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Title & Caption */}
+              {/* Direct Paste URL Toggle Link */}
+              <div style={{ padding: "6px 12px", background: "#F8FAFC", borderTop: "1px solid #F1F5F9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowUrlInput(!showUrlInput)}
+                  style={{ border: "none", background: "none", color: "#2563EB", fontSize: 11, fontWeight: 600, cursor: "pointer", padding: 0 }}
+                >
+                  {showUrlInput ? "Hide URL input" : "🔗 Paste direct URL link instead"}
+                </button>
+              </div>
+
+              {showUrlInput && (
+                <div style={{ padding: "8px 12px", background: "#FFF", borderTop: "1px solid #F1F5F9" }}>
+                  <input
+                    type="url"
+                    className="form-input"
+                    placeholder="Paste direct media or thumbnail URL..."
+                    value={previewTab === "cover" ? thumbnailUrl : mediaUrl}
+                    onChange={(e) => {
+                      if (previewTab === "cover") setThumbnailUrl(e.target.value);
+                      else setMediaUrl(e.target.value);
+                    }}
+                    style={{ fontSize: 12, width: "100%", padding: "5px 8px" }}
+                  />
+                </div>
+              )}
+
+              {/* Live Title & Caption Preview */}
               <div style={{ padding: 12 }}>
                 <div style={{ fontSize: 13, fontWeight: 800, color: "#0F172A", marginBottom: 4 }}>
                   {title || "Post Title Preview"}
@@ -833,12 +887,12 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
               </div>
             </div>
 
-            {/* Schedule Notice */}
-            <div style={{ fontSize: 11.5, color: "#64748B", textAlign: "center", background: "#FFFFFF", padding: "8px 10px", borderRadius: 8, border: "1px solid #E2E8F0" }}>
+            {/* Schedule Notice Banner */}
+            <div style={{ fontSize: 11.5, color: "#475569", textAlign: "center", background: "#FFFFFF", padding: "10px 12px", borderRadius: 8, border: "1px solid #E2E8F0", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
               {timingMode === "post_now" ? (
-                <span>⚡ Will publish <strong>immediately</strong> upon clicking submit.</span>
+                <span>⚡ Scheduled to publish <strong>immediately</strong> upon submission.</span>
               ) : (
-                <span>⏰ Will publish on <strong>{scheduleDate}</strong> at <strong>{scheduleTime}</strong> (Default 6:00 PM).</span>
+                <span>⏰ Scheduled to publish on <strong>{scheduleDate}</strong> at <strong>{scheduleTime}</strong> ({Intl.DateTimeFormat().resolvedOptions().timeZone}).</span>
               )}
             </div>
 
@@ -846,13 +900,14 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
 
         </div>
 
-        {/* ── STICKY FOOTER CONTAINER ─────────────────────────────── */}
-        <div style={{ background: "#FFFFFF", borderTop: "1px solid #E2E8F0", padding: "12px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+        {/* ── STICKY FOOTER CONTAINER & SPLIT PUBLISH DROPDOWN ──────────── */}
+        <div style={{ background: "#FFFFFF", borderTop: "1px solid #E2E8F0", padding: "12px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0, position: "relative" }}>
+          
           <div style={{ fontSize: 12, color: "#64748B" }}>
             {selectedPlatforms.length > 0 ? `Targeting ${selectedPlatforms.length} social platforms` : "No platforms selected"}
           </div>
 
-          <div style={{ display: "flex", gap: 10 }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", position: "relative" }} ref={publishContainerRef}>
             <Btn variant="outline" type="button" onClick={onClose} disabled={submitting}>
               Cancel
             </Btn>
@@ -874,14 +929,221 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
               Save Draft
             </button>
 
-            <Btn type="button" onClick={handleSubmit} disabled={submitting}>
-              {submitting
-                ? "Processing..."
-                : timingMode === "post_now"
-                ? "Publish Now"
-                : `Schedule Post (${scheduleTime})`}
-            </Btn>
+            {/* ── SPLIT DROPDOWN BUTTON (GitHub / Vercel / Linear Style) ── */}
+            <div style={{ display: "inline-flex", borderRadius: 8, overflow: "visible", boxShadow: "0 1.5px 4px rgba(255,106,0,0.25)" }}>
+              
+              {/* Primary Action Trigger */}
+              <button
+                type="button"
+                onClick={() => handleSubmit(timingMode)}
+                disabled={submitting}
+                style={{
+                  padding: "8px 16px",
+                  borderTopLeftRadius: 8,
+                  borderBottomLeftRadius: 8,
+                  border: "none",
+                  background: "#FF6A00",
+                  color: "#FFFFFF",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  borderRight: "1px solid rgba(255,255,255,0.3)",
+                }}
+              >
+                {submitting
+                  ? "Processing..."
+                  : timingMode === "post_now"
+                  ? "⚡ Publish Now"
+                  : `📅 Schedule Post (${scheduleTime})`}
+              </button>
+
+              {/* Dropdown Caret Trigger */}
+              <button
+                type="button"
+                onClick={() => {
+                  setPublishDropdownOpen(!publishDropdownOpen);
+                  setSchedulePopoverOpen(false);
+                }}
+                disabled={submitting}
+                style={{
+                  padding: "8px 10px",
+                  borderTopRightRadius: 8,
+                  borderBottomRightRadius: 8,
+                  border: "none",
+                  background: "#FF6A00",
+                  color: "#FFFFFF",
+                  fontSize: 12,
+                  fontWeight: 800,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                ▼
+              </button>
+            </div>
+
+            {/* ── FLOATING PUBLISH DROPDOWN MENU ──────────────────── */}
+            {publishDropdownOpen && (
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "calc(100% + 8px)",
+                  right: 0,
+                  width: 210,
+                  background: "#FFFFFF",
+                  borderRadius: 10,
+                  boxShadow: "0 10px 25px -5px rgba(0,0,0,0.15), 0 8px 10px -6px rgba(0,0,0,0.1)",
+                  border: "1px solid #E2E8F0",
+                  padding: "6px 0",
+                  zIndex: 100,
+                  animation: "fadeIn 0.15s ease-out",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTimingMode("post_now");
+                    setPublishDropdownOpen(false);
+                    handleSubmit("post_now");
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "10px 14px",
+                    textAlign: "left",
+                    background: timingMode === "post_now" ? "#FFF7ED" : "transparent",
+                    border: "none",
+                    color: timingMode === "post_now" ? "#FF6A00" : "#0F172A",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  ⚡ Publish Now
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTimingMode("schedule");
+                    setPublishDropdownOpen(false);
+                    setSchedulePopoverOpen(true);
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "10px 14px",
+                    textAlign: "left",
+                    background: timingMode === "schedule" ? "#FFF7ED" : "transparent",
+                    border: "none",
+                    color: timingMode === "schedule" ? "#FF6A00" : "#0F172A",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                  }}
+                >
+                  📅 Schedule for Later
+                </button>
+              </div>
+            )}
+
+            {/* ── SCHEDULE POPOVER (Anchored to Publish Button) ──────── */}
+            {schedulePopoverOpen && (
+              <div
+                style={{
+                  position: "absolute",
+                  bottom: "calc(100% + 10px)",
+                  right: 0,
+                  width: 290,
+                  background: "#FFFFFF",
+                  borderRadius: 12,
+                  boxShadow: "0 20px 30px -10px rgba(0,0,0,0.18), 0 10px 15px -5px rgba(0,0,0,0.1)",
+                  border: "1px solid #E2E8F0",
+                  padding: 16,
+                  zIndex: 101,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 800, color: "#0F172A" }}>
+                    📅 Schedule Post
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSchedulePopoverOpen(false)}
+                    style={{ border: "none", background: "none", color: "#94A3B8", cursor: "pointer", fontSize: 14 }}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div>
+                    <label style={{ fontSize: 11.5, fontWeight: 700, color: "#334155", display: "block", marginBottom: 4 }}>
+                      Publish Date *
+                    </label>
+                    <input
+                      type="date"
+                      className="form-input"
+                      value={scheduleDate}
+                      onChange={(e) => setScheduleDate(e.target.value)}
+                      style={{ fontSize: 12.5, width: "100%", padding: "7px 10px", borderRadius: 6 }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: 11.5, fontWeight: 700, color: "#334155", display: "block", marginBottom: 4 }}>
+                      Publish Time *
+                    </label>
+                    <input
+                      type="time"
+                      className="form-input"
+                      value={scheduleTime}
+                      onChange={(e) => setScheduleTime(e.target.value)}
+                      style={{ fontSize: 12.5, width: "100%", padding: "7px 10px", borderRadius: 6 }}
+                    />
+                  </div>
+
+                  <div style={{ fontSize: 11, color: "#64748B", background: "#F8FAFC", padding: "6px 8px", borderRadius: 6 }}>
+                    Timezone: {Intl.DateTimeFormat().resolvedOptions().timeZone}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTimingMode("schedule");
+                      setSchedulePopoverOpen(false);
+                      showToast(`Schedule confirmed for ${scheduleDate} at ${scheduleTime}`, "info");
+                    }}
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      borderRadius: 6,
+                      background: "#FF6A00",
+                      color: "#FFFFFF",
+                      fontSize: 12.5,
+                      fontWeight: 700,
+                      border: "none",
+                      cursor: "pointer",
+                      marginTop: 4,
+                    }}
+                  >
+                    Done & Confirm
+                  </button>
+                </div>
+              </div>
+            )}
+
           </div>
+
         </div>
 
       </div>

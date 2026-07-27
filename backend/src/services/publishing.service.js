@@ -30,7 +30,7 @@ const notifyAssignee = async (job, type, content, senderId) => {
  * Schedule a new publishing job
  */
 export const schedulePost = async (data, loggedInUser) => {
-    const { taskId, shootId, platform, platforms, caption, mediaUrls, scheduledAt, postNow } = data;
+    const { taskId, shootId, platform, platforms, title, caption, mediaUrls, scheduledAt, postNow } = data;
 
     if (!taskId && !shootId && !data.clientId) {
         throw new Error("Client selection, taskId, or shootId is required to schedule a post");
@@ -117,6 +117,7 @@ export const schedulePost = async (data, loggedInUser) => {
                 taskId: taskId || null,
                 shootId: shootId || null,
                 platform: p.toUpperCase(),
+                title: title || data.title || null,
                 caption: caption || null,
                 mediaUrls: Array.isArray(mediaUrls) ? mediaUrls.join(",") : (mediaUrls || ""),
                 scheduledAt: scheduleDateObj,
@@ -151,7 +152,7 @@ export const schedulePost = async (data, loggedInUser) => {
 
     // Notify assignee (using the first job created as reference)
     if (createdJobs.length > 0) {
-        const itemTitle = task ? task.title : (shoot ? shoot.title : "Content");
+        const itemTitle = title || (task ? task.title : (shoot ? shoot.title : "Content"));
         await notifyAssignee(
             createdJobs[0],
             "PUBLISHING_SCHEDULED",
