@@ -62,10 +62,29 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
   const [dragThumbOver, setDragThumbOver] = useState(false);
   const [showUrlInput, setShowUrlInput] = useState(false);
 
+  // Helper: Get smart date and time (if time for selected date is in past, auto-advance to next day)
+  const getSmartScheduleDateTime = (targetTime = "18:00", requestedDate = null) => {
+    const now = new Date();
+    const [h, m] = targetTime.split(":").map(Number);
+    const dateStr = requestedDate || now.toISOString().split("T")[0];
+    const [yr, mo, dy] = dateStr.split("-").map(Number);
+    const checkObj = new Date(yr, mo - 1, dy, h, m, 0);
+
+    if (now > checkObj) {
+      // If time for this day has passed, set date to tomorrow!
+      const nextDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      const yyyy = nextDay.getFullYear();
+      const mm = String(nextDay.getMonth() + 1).padStart(2, "0");
+      const dd = String(nextDay.getDate()).padStart(2, "0");
+      return { date: `${yyyy}-${mm}-${dd}`, time: targetTime };
+    }
+    return { date: dateStr, time: targetTime };
+  };
+
   // Timing state
   const [timingMode, setTimingMode] = useState("schedule"); // "post_now" | "schedule"
-  const [scheduleDate, setScheduleDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [scheduleTime, setScheduleTime] = useState("18:00"); // Default 6:00 PM
+  const [scheduleDate, setScheduleDate] = useState(() => getSmartScheduleDateTime("18:00").date);
 
   // Preview State (cover = Thumbnail, video = Media View)
   const [previewTab, setPreviewTab] = useState("video");
@@ -101,9 +120,9 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
     setThumbnailFileName("");
     setContentType("reel");
     setSelectedPlatforms([]);
-    const today = new Date().toISOString().split("T")[0];
-    setScheduleDate(today);
-    setScheduleTime("18:00");
+    const smart = getSmartScheduleDateTime("18:00");
+    setScheduleDate(smart.date);
+    setScheduleTime(smart.time);
     setTimingMode("schedule");
     setPreviewTab("video");
     setShowUrlInput(false);
@@ -521,7 +540,7 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                     );
                   }
 
-                  // Not connected: greyed out pill
+                  // Not connected: greyed out pill (without lock sign)
                   return (
                     <div
                       key={pKey}
@@ -541,7 +560,6 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                       }}
                       title={`${pInfo.name} is not connected for this client`}
                     >
-                      <span style={{ fontSize: 10 }}>🔒</span>
                       <span>{pInfo.name}</span>
                     </div>
                   );
@@ -564,35 +582,12 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
               />
             </div>
 
-            {/* Caption Textarea & AI Assist (Heading changed to "Caption") */}
+            {/* Caption Textarea (Heading changed to "Caption") */}
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                 <label style={{ fontSize: 12.5, fontWeight: 700, color: "#334155", margin: 0 }}>
                   Caption
                 </label>
-
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <span style={{ fontSize: 11, color: "#94A3B8" }}>{caption.length} characters</span>
-                  <button
-                    type="button"
-                    onClick={handleAiAssist}
-                    disabled={aiLoading}
-                    style={{
-                      padding: "4px 10px",
-                      borderRadius: 6,
-                      border: "1px solid #C084FC",
-                      background: "#F3E8FF",
-                      color: "#7E22CE",
-                      fontSize: 11.5,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 4,
-                    }}
-                  >
-                    {aiLoading ? "Generating..." : "✨ AI Assist"}
-                  </button>
                 </div>
               </div>
 
@@ -1162,111 +1157,217 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                   position: "absolute",
                   bottom: "calc(100% + 10px)",
                   right: 0,
-                  width: 290,
+                  width: 320,
                   background: "#FFFFFF",
-                  borderRadius: 12,
-                  boxShadow: "0 20px 30px -10px rgba(0,0,0,0.18), 0 10px 15px -5px rgba(0,0,0,0.1)",
+                  borderRadius: 14,
+                  boxShadow: "0 20px 35px -10px rgba(15,23,42,0.22), 0 8px 16px -6px rgba(15,23,42,0.12)",
                   border: "1px solid #E2E8F0",
                   padding: 16,
                   zIndex: 101,
+                  animation: "fadeIn 0.15s ease-out",
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 800, color: "#0F172A" }}>
-                    📅 Schedule Post
+                  <div style={{ fontSize: 13.5, fontWeight: 800, color: "#0F172A", display: "flex", alignItems: "center", gap: 6 }}>
+                    <span>📅</span> Schedule Post
                   </div>
                   <button
                     type="button"
                     onClick={() => setSchedulePopoverOpen(false)}
-                    style={{ border: "none", background: "none", color: "#94A3B8", cursor: "pointer", fontSize: 14 }}
+                    style={{ border: "none", background: "none", color: "#94A3B8", cursor: "pointer", fontSize: 14, padding: 4 }}
                   >
                     ✕
                   </button>
                 </div>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                  {/* Date Input */}
                   <div>
-                    <label style={{ fontSize: 11.5, fontWeight: 700, color: "#334155", display: "block", marginBottom: 4 }}>
+                    <label style={{ fontSize: 11.5, fontWeight: 700, color: "#334155", display: "block", marginBottom: 5 }}>
                       Publish Date *
                     </label>
                     <input
                       type="date"
                       className="form-input"
                       value={scheduleDate}
-                      onChange={(e) => setScheduleDate(e.target.value)}
-                      style={{ fontSize: 12.5, width: "100%", padding: "7px 10px", borderRadius: 6 }}
+                      onChange={(e) => {
+                        const newDate = e.target.value;
+                        const smart = getSmartScheduleDateTime(scheduleTime, newDate);
+                        setScheduleDate(smart.date);
+                        setScheduleTime(smart.time);
+                      }}
+                      style={{ fontSize: 12.5, width: "100%", padding: "7px 10px", borderRadius: 8, border: "1.5px solid #E2E8F0" }}
                     />
                   </div>
 
+                  {/* Interactive Clock & Time Selector */}
                   <div>
-                    <label style={{ fontSize: 11.5, fontWeight: 700, color: "#334155", display: "block", marginBottom: 4 }}>
-                      Publish Time *
-                    </label>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      {/* Hour Select */}
-                      <select
-                        value={scheduleTime.split(":")[0]}
-                        onChange={(e) => {
-                          const mins = scheduleTime.split(":")[1] || "00";
-                          setScheduleTime(`${e.target.value}:${mins}`);
-                        }}
-                        style={{
-                          flex: 1,
-                          padding: "8px 10px",
-                          borderRadius: 8,
-                          border: "1.5px solid #E2E8F0",
-                          background: "#FFFFFF",
-                          fontSize: 13,
-                          fontWeight: 700,
-                          color: "#0F172A",
-                          cursor: "pointer",
-                          outline: "none",
-                          appearance: "none",
-                          textAlign: "center",
-                        }}
-                      >
-                        {Array.from({ length: 24 }, (_, i) => {
-                          const val = String(i).padStart(2, "0");
-                          const h12 = i === 0 ? 12 : i > 12 ? i - 12 : i;
-                          const ampm = i >= 12 ? "PM" : "AM";
-                          return <option key={val} value={val}>{h12} {ampm}</option>;
-                        })}
-                      </select>
-
-                      <span style={{ fontSize: 16, fontWeight: 800, color: "#334155" }}>:</span>
-
-                      {/* Minute Select */}
-                      <select
-                        value={scheduleTime.split(":")[1] || "00"}
-                        onChange={(e) => {
-                          const hrs = scheduleTime.split(":")[0] || "18";
-                          setScheduleTime(`${hrs}:${e.target.value}`);
-                        }}
-                        style={{
-                          flex: 1,
-                          padding: "8px 10px",
-                          borderRadius: 8,
-                          border: "1.5px solid #E2E8F0",
-                          background: "#FFFFFF",
-                          fontSize: 13,
-                          fontWeight: 700,
-                          color: "#0F172A",
-                          cursor: "pointer",
-                          outline: "none",
-                          appearance: "none",
-                          textAlign: "center",
-                        }}
-                      >
-                        {Array.from({ length: 60 }, (_, i) => {
-                          const val = String(i).padStart(2, "0");
-                          return <option key={val} value={val}>{val}</option>;
-                        })}
-                      </select>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                      <label style={{ fontSize: 11.5, fontWeight: 700, color: "#334155", margin: 0 }}>
+                        Publish Time ⏰
+                      </label>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: "#FF6A00" }}>
+                        {(() => {
+                          const [hh, mm] = scheduleTime.split(":");
+                          const h = parseInt(hh);
+                          const ampm = h >= 12 ? "PM" : "AM";
+                          const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+                          return `${h12}:${mm} ${ampm}`;
+                        })()}
+                      </span>
                     </div>
+
+                    {/* Interactive Presets */}
+                    <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 10 }}>
+                      {[
+                        { label: "9 AM", time: "09:00" },
+                        { label: "12 PM", time: "12:00" },
+                        { label: "3 PM", time: "15:00" },
+                        { label: "6 PM", time: "18:00" },
+                        { label: "9 PM", time: "21:00" },
+                      ].map((preset) => {
+                        const isSelected = scheduleTime === preset.time;
+                        return (
+                          <button
+                            key={preset.time}
+                            type="button"
+                            onClick={() => {
+                              const smart = getSmartScheduleDateTime(preset.time, scheduleDate);
+                              setScheduleTime(smart.time);
+                              setScheduleDate(smart.date);
+                            }}
+                            style={{
+                              flex: 1,
+                              padding: "4px 6px",
+                              borderRadius: 6,
+                              border: isSelected ? "1.5px solid #FF6A00" : "1px solid #E2E8F0",
+                              background: isSelected ? "#FFF7ED" : "#FFFFFF",
+                              color: isSelected ? "#FF6A00" : "#475569",
+                              fontSize: 11,
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              textAlign: "center",
+                              transition: "all 0.15s ease",
+                            }}
+                          >
+                            {preset.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Interactive Dial: Hour, Minute, AM/PM Toggle */}
+                    {(() => {
+                      const [hhStr, mmStr] = scheduleTime.split(":");
+                      const currentH = parseInt(hhStr || "18");
+                      const isPM = currentH >= 12;
+                      const h12Val = currentH === 0 ? 12 : currentH > 12 ? currentH - 12 : currentH;
+
+                      const updateTime = (newH12, newM, targetIsPM) => {
+                        let finalH24 = newH12 % 12;
+                        if (targetIsPM) finalH24 += 12;
+                        const formattedH = String(finalH24).padStart(2, "0");
+                        const formattedM = String(newM).padStart(2, "0");
+                        const smart = getSmartScheduleDateTime(`${formattedH}:${formattedM}`, scheduleDate);
+                        setScheduleTime(smart.time);
+                        setScheduleDate(smart.date);
+                      };
+
+                      return (
+                        <div style={{ display: "flex", gap: 6, alignItems: "center", background: "#F8FAFC", padding: 8, borderRadius: 10, border: "1.5px solid #E2E8F0" }}>
+                          {/* Hour Select */}
+                          <select
+                            value={h12Val}
+                            onChange={(e) => updateTime(parseInt(e.target.value), mmStr || "00", isPM)}
+                            style={{
+                              flex: 1,
+                              padding: "6px 8px",
+                              borderRadius: 6,
+                              border: "1px solid #CBD5E1",
+                              background: "#FFFFFF",
+                              fontSize: 13,
+                              fontWeight: 800,
+                              color: "#0F172A",
+                              cursor: "pointer",
+                              textAlign: "center",
+                              outline: "none",
+                            }}
+                          >
+                            {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
+                              <option key={h} value={h}>{h}</option>
+                            ))}
+                          </select>
+
+                          <span style={{ fontSize: 16, fontWeight: 800, color: "#64748B" }}>:</span>
+
+                          {/* Minute Select */}
+                          <select
+                            value={mmStr || "00"}
+                            onChange={(e) => updateTime(h12Val, e.target.value, isPM)}
+                            style={{
+                              flex: 1,
+                              padding: "6px 8px",
+                              borderRadius: 6,
+                              border: "1px solid #CBD5E1",
+                              background: "#FFFFFF",
+                              fontSize: 13,
+                              fontWeight: 800,
+                              color: "#0F172A",
+                              cursor: "pointer",
+                              textAlign: "center",
+                              outline: "none",
+                            }}
+                          >
+                            {["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"].map((m) => (
+                              <option key={m} value={m}>{m}</option>
+                            ))}
+                          </select>
+
+                          {/* Interactive AM / PM Toggle Pills */}
+                          <div style={{ display: "flex", background: "#E2E8F0", borderRadius: 6, padding: 2 }}>
+                            <button
+                              type="button"
+                              onClick={() => updateTime(h12Val, mmStr || "00", false)}
+                              style={{
+                                padding: "4px 8px",
+                                borderRadius: 4,
+                                border: "none",
+                                background: !isPM ? "#FF6A00" : "transparent",
+                                color: !isPM ? "#FFFFFF" : "#64748B",
+                                fontSize: 11,
+                                fontWeight: 800,
+                                cursor: "pointer",
+                                transition: "all 0.15s ease",
+                              }}
+                            >
+                              AM
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateTime(h12Val, mmStr || "00", true)}
+                              style={{
+                                padding: "4px 8px",
+                                borderRadius: 4,
+                                border: "none",
+                                background: isPM ? "#FF6A00" : "transparent",
+                                color: isPM ? "#FFFFFF" : "#64748B",
+                                fontSize: 11,
+                                fontWeight: 800,
+                                cursor: "pointer",
+                                transition: "all 0.15s ease",
+                              }}
+                            >
+                              PM
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
 
-                  <div style={{ fontSize: 11, color: "#64748B", background: "#F8FAFC", padding: "6px 8px", borderRadius: 6 }}>
-                    Timezone: {Intl.DateTimeFormat().resolvedOptions().timeZone}
+                  <div style={{ fontSize: 11, color: "#64748B", background: "#F8FAFC", padding: "6px 8px", borderRadius: 6, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span>Timezone:</span>
+                    <strong style={{ color: "#334155" }}>{Intl.DateTimeFormat().resolvedOptions().timeZone}</strong>
                   </div>
 
                   <button
@@ -1278,15 +1379,17 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                     }}
                     style={{
                       width: "100%",
-                      padding: "8px",
-                      borderRadius: 6,
+                      padding: "9px",
+                      borderRadius: 8,
                       background: "#FF6A00",
                       color: "#FFFFFF",
                       fontSize: 12.5,
                       fontWeight: 700,
                       border: "none",
                       cursor: "pointer",
-                      marginTop: 4,
+                      marginTop: 2,
+                      boxShadow: "0 2px 6px rgba(255,106,0,0.3)",
+                      transition: "all 0.15s ease",
                     }}
                   >
                     Done & Confirm
