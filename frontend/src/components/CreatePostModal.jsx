@@ -410,56 +410,85 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
           {/* LEFT FORM COLUMN (Post Details Metadata & Copywriting Only) */}
           <div style={{ overflowY: "auto", padding: "24px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
             
-            {/* Client Select */}
-            <div>
-              <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: "#334155", marginBottom: 6 }}>
-                Select Client *
-              </label>
-              <select
-                className="form-input"
-                value={clientId}
-                onChange={(e) => setClientId(e.target.value)}
-                style={{ width: "100%", fontSize: 13, fontWeight: 600, padding: "9px 12px", borderRadius: 8 }}
-                required
-              >
-                <option value="">-- Choose Client --</option>
-                {clients.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.companyName || c.brandName || c.name} {c.brandName ? `(${c.brandName})` : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Side-by-Side: Select Client & Content Format */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              {/* Select Client */}
+              <div>
+                <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: "#334155", marginBottom: 6 }}>
+                  Select Client *
+                </label>
+                <div style={{ position: "relative" }}>
+                  <select
+                    className="form-input"
+                    value={clientId}
+                    onChange={(e) => setClientId(e.target.value)}
+                    style={{
+                      width: "100%",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      padding: "9px 30px 9px 12px",
+                      borderRadius: 8,
+                      border: "1px solid #CBD5E1",
+                      background: "#FFFFFF",
+                      appearance: "none",
+                      cursor: "pointer",
+                      color: "#0F172A",
+                    }}
+                    required
+                  >
+                    <option value="">-- Choose Client --</option>
+                    {clients.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.companyName || c.brandName || c.name} {c.brandName ? `(${c.brandName})` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: "#64748B", pointerEvents: "none", fontSize: 10 }}>
+                    ▼
+                  </span>
+                </div>
+              </div>
 
-            {/* Content Format Selector */}
-            <div>
-              <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: "#334155", marginBottom: 6 }}>
-                Content Format *
-              </label>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
-                {CONTENT_TYPES.map((ct) => {
-                  const active = contentType === ct.id;
-                  return (
-                    <button
-                      key={ct.id}
-                      type="button"
-                      onClick={() => setContentType(ct.id)}
-                      style={{
-                        padding: "10px",
-                        borderRadius: 8,
-                        border: active ? "2px solid #FF6A00" : "1px solid #E2E8F0",
-                        background: active ? "#FFF7ED" : "#FFFFFF",
-                        color: active ? "#FF6A00" : "#334155",
-                        textAlign: "center",
-                        cursor: "pointer",
-                        transition: "all 0.15s ease",
-                      }}
-                    >
-                      <div style={{ fontWeight: 700, fontSize: 12.5, marginBottom: 2 }}>{ct.label}</div>
-                      <div style={{ fontSize: 10.5, opacity: 0.75 }}>{ct.desc}</div>
-                    </button>
-                  );
-                })}
+              {/* Content Format Selector */}
+              <div>
+                <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: "#334155", marginBottom: 6 }}>
+                  Content Format *
+                </label>
+                <div style={{ position: "relative" }}>
+                  <select
+                    className="form-input"
+                    value={contentType}
+                    onChange={(e) => setContentType(e.target.value)}
+                    style={{
+                      width: "100%",
+                      fontSize: 13,
+                      fontWeight: 600,
+                      padding: "9px 30px 9px 12px",
+                      borderRadius: 8,
+                      border: "1px solid #CBD5E1",
+                      background: "#FFFFFF",
+                      appearance: "none",
+                      cursor: "pointer",
+                      color: "#0F172A",
+                    }}
+                  >
+                    {CONTENT_TYPES.map((ct) => {
+                      let formatText = ct.label;
+                      if (ct.id === "reel") formatText = "Reel / Short (9:16)";
+                      else if (ct.id === "video") formatText = "Video (16:9)";
+                      else if (ct.id === "post") formatText = "Static / Carousel";
+                      else if (ct.id === "story") formatText = "Story (24h)";
+                      return (
+                        <option key={ct.id} value={ct.id}>
+                          {formatText}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: "#64748B", pointerEvents: "none", fontSize: 10 }}>
+                    ▼
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -588,7 +617,6 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                 <label style={{ fontSize: 12.5, fontWeight: 700, color: "#334155", margin: 0 }}>
                   Caption
                 </label>
-                </div>
               </div>
 
               <textarea
