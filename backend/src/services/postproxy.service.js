@@ -128,15 +128,20 @@ export const getProfiles = async (groupId) => {
  * @param {string[]} profileIds - Array of PostProxy profile IDs (or platform name identifiers)
  * @param {string} body - The caption/content of the post
  * @param {string[]} mediaUrls - Array of image/video URLs
+ * @param {string} [title] - Optional title for platforms that support it (e.g., YouTube)
  * @returns {Promise<{id: string, status: string}>}
  */
-export const publishPost = async (profileIds, body, mediaUrls = []) => {
+export const publishPost = async (profileIds, body, mediaUrls = [], title = null) => {
     const url = `${getBaseUrl()}/api/posts`;
+    const postPayload = { body };
+    if (title) {
+        postPayload.title = title;
+    }
     const response = await fetch(url, {
         method: "POST",
         headers: getHeaders(),
         body: JSON.stringify({
-            post: { body },
+            post: postPayload,
             profiles: profileIds,
             media: mediaUrls
         })

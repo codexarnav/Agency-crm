@@ -91,18 +91,33 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Reset form to blank state
+  const resetForm = () => {
+    setTitle("");
+    setCaption("");
+    setMediaUrl("");
+    setThumbnailUrl("");
+    setMediaFileName("");
+    setThumbnailFileName("");
+    setContentType("reel");
+    setSelectedPlatforms([]);
+    const today = new Date().toISOString().split("T")[0];
+    setScheduleDate(today);
+    setScheduleTime("18:00");
+    setTimingMode("schedule");
+    setPreviewTab("video");
+    setShowUrlInput(false);
+    setPublishDropdownOpen(false);
+    setSchedulePopoverOpen(false);
+  };
+
   // Default client selection on open
   useEffect(() => {
     if (open) {
+      resetForm();
       if (clients && clients.length > 0 && !clientId) {
         setClientId(clients[0].id);
       }
-      const today = new Date().toISOString().split("T")[0];
-      setScheduleDate(today);
-      setScheduleTime("18:00");
-      setTimingMode("schedule");
-      setPublishDropdownOpen(false);
-      setSchedulePopoverOpen(false);
     }
   }, [open, clients]);
 
@@ -133,10 +148,9 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
     return () => { isMounted = false; };
   }, [clientId]);
 
-  // Auto-populate platforms based on Client Connections & Content Type
-  useEffect(() => {
-    if (!socialStatus) return;
-
+  // Compute connected platforms from social status
+  const connectedPlatformsList = useMemo(() => {
+    if (!socialStatus) return [];
     const connected = socialStatus.connectedPlatforms || [];
     const availableFromFlags = [];
     if (socialStatus.instagramConnected) availableFromFlags.push("instagram");
@@ -145,13 +159,18 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
     if (socialStatus.linkedinConnected) availableFromFlags.push("linkedin");
     if (socialStatus.twitterConnected) availableFromFlags.push("twitter");
     if (socialStatus.tiktokConnected) availableFromFlags.push("tiktok");
+    return [...new Set([...connected, ...availableFromFlags])];
+  }, [socialStatus]);
 
-    const allConnected = [...new Set([...connected, ...availableFromFlags])];
+  // Auto-populate platforms based on Client Connections & Content Type
+  useEffect(() => {
+    if (!socialStatus) return;
+
     const eligibleForType = CONTENT_TYPE_PLATFORMS[contentType] || [];
-    const matched = eligibleForType.filter((p) => allConnected.includes(p));
+    const matched = eligibleForType.filter((p) => connectedPlatformsList.includes(p));
 
     setSelectedPlatforms(matched);
-  }, [socialStatus, contentType]);
+  }, [socialStatus, contentType, connectedPlatformsList]);
 
   const selectedClient = useMemo(() => {
     return clients.find((c) => c.id === clientId);
@@ -159,6 +178,14 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
 
   const handleRemovePlatform = (platKey) => {
     setSelectedPlatforms((prev) => prev.filter((p) => p !== platKey));
+  };
+
+  const handleTogglePlatform = (platKey) => {
+    if (selectedPlatforms.includes(platKey)) {
+      setSelectedPlatforms((prev) => prev.filter((p) => p !== platKey));
+    } else {
+      setSelectedPlatforms((prev) => [...prev, platKey]);
+    }
   };
 
   // Upload handler helper
@@ -256,6 +283,7 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
         "success"
       );
 
+      resetForm();
       if (onSuccess) onSuccess();
       onClose();
     } catch (err) {
@@ -425,14 +453,14 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                 {loadingSocial && <span style={{ fontSize: 11, color: "#94A3B8" }}>Checking connections...</span>}
               </div>
 
-              {selectedPlatforms.length === 0 ? (
-                <div style={{ padding: "10px 12px", borderRadius: 8, background: "#FEF2F2", border: "1px dashed #FCA5A5", color: "#991B1B", fontSize: 12 }}>
-                  ⚠️ No connected social accounts found for {contentType.toUpperCase()} on this client. Please connect accounts in Client Management.
-                </div>
-              ) : (
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {selectedPlatforms.map((pKey) => {
-                    const pInfo = PLATFORM_MAP[pKey] || { name: pKey, color: "#333", bg: "#F3F4F6" };
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {(CONTENT_TYPE_PLATFORMS[contentType] || []).map((pKey) => {
+                  const pInfo = PLATFORM_MAP[pKey] || { name: pKey, color: "#333", bg: "#F3F4F6" };
+                  const isConnected = connectedPlatformsList.includes(pKey);
+                  const isSelected = selectedPlatforms.includes(pKey);
+
+                  if (isConnected && isSelected) {
+                    // Connected & selected: colored pill with ✕
                     return (
                       <div
                         key={pKey}
@@ -443,25 +471,82 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                           padding: "5px 10px",
                           borderRadius: 16,
                           background: pInfo.bg,
-                          border: `1px solid ${pInfo.color}40`,
+                          border: `1.5px solid ${pInfo.color}50`,
                           fontSize: 12,
                           fontWeight: 700,
                           color: pInfo.color,
+                          transition: "all 0.15s ease",
                         }}
                       >
                         <span>{pInfo.name}</span>
                         <button
                           type="button"
                           onClick={() => handleRemovePlatform(pKey)}
-                          style={{ border: "none", background: "transparent", color: pInfo.color, cursor: "pointer", fontSize: 11, fontWeight: 800, padding: "0 2px" }}
+                          style={{ border: "none", background: "transparent", color: pInfo.color, cursor: "pointer", fontSize: 11, fontWeight: 800, padding: "0 2px", lineHeight: 1 }}
                         >
                           ✕
                         </button>
                       </div>
                     );
-                  })}
-                </div>
-              )}
+                  }
+
+                  if (isConnected && !isSelected) {
+                    // Connected but deselected: faded pill, clickable to re-add
+                    return (
+                      <div
+                        key={pKey}
+                        onClick={() => handleTogglePlatform(pKey)}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: 6,
+                          padding: "5px 10px",
+                          borderRadius: 16,
+                          background: "#F8FAFC",
+                          border: `1.5px dashed ${pInfo.color}40`,
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: pInfo.color,
+                          opacity: 0.6,
+                          cursor: "pointer",
+                          transition: "all 0.15s ease",
+                        }}
+                        title={`Click to add ${pInfo.name}`}
+                        onMouseEnter={(e) => { e.currentTarget.style.opacity = "0.9"; e.currentTarget.style.borderStyle = "solid"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.opacity = "0.6"; e.currentTarget.style.borderStyle = "dashed"; }}
+                      >
+                        <span style={{ fontSize: 11 }}>+</span>
+                        <span>{pInfo.name}</span>
+                      </div>
+                    );
+                  }
+
+                  // Not connected: greyed out pill
+                  return (
+                    <div
+                      key={pKey}
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 5,
+                        padding: "5px 10px",
+                        borderRadius: 16,
+                        background: "#F1F5F9",
+                        border: "1.5px solid #E2E8F0",
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: "#94A3B8",
+                        cursor: "not-allowed",
+                        opacity: 0.5,
+                      }}
+                      title={`${pInfo.name} is not connected for this client`}
+                    >
+                      <span style={{ fontSize: 10 }}>🔒</span>
+                      <span>{pInfo.name}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Post Title */}
@@ -891,9 +976,17 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
             <div style={{ fontSize: 11.5, color: "#475569", textAlign: "center", background: "#FFFFFF", padding: "10px 12px", borderRadius: 8, border: "1px solid #E2E8F0", boxShadow: "0 1px 3px rgba(0,0,0,0.03)" }}>
               {timingMode === "post_now" ? (
                 <span>⚡ Scheduled to publish <strong>immediately</strong> upon submission.</span>
-              ) : (
-                <span>⏰ Scheduled to publish on <strong>{scheduleDate}</strong> at <strong>{scheduleTime}</strong> ({Intl.DateTimeFormat().resolvedOptions().timeZone}).</span>
-              )}
+              ) : (() => {
+                const [yr, mo, dy] = scheduleDate.split("-");
+                const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+                const formattedDate = `${parseInt(dy)} ${months[parseInt(mo)-1]} ${yr}`;
+                const [hh, mm] = scheduleTime.split(":");
+                const h = parseInt(hh);
+                const ampm = h >= 12 ? "PM" : "AM";
+                const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+                const formattedTime = `${h12}:${mm} ${ampm}`;
+                return <span>⏰ Scheduled to publish on <strong>{formattedDate}</strong> at <strong>{formattedTime}</strong> ({Intl.DateTimeFormat().resolvedOptions().timeZone}).</span>;
+              })()}
             </div>
 
           </div>
@@ -957,7 +1050,13 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                   ? "Processing..."
                   : timingMode === "post_now"
                   ? "⚡ Publish Now"
-                  : `📅 Schedule Post (${scheduleTime})`}
+                  : (() => {
+                      const [hh, mm] = scheduleTime.split(":");
+                      const h = parseInt(hh);
+                      const ampm = h >= 12 ? "PM" : "AM";
+                      const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+                      return `📅 Schedule Post (${h12}:${mm} ${ampm})`;
+                    })()}
               </button>
 
               {/* Dropdown Caret Trigger */}
@@ -1103,13 +1202,67 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                     <label style={{ fontSize: 11.5, fontWeight: 700, color: "#334155", display: "block", marginBottom: 4 }}>
                       Publish Time *
                     </label>
-                    <input
-                      type="time"
-                      className="form-input"
-                      value={scheduleTime}
-                      onChange={(e) => setScheduleTime(e.target.value)}
-                      style={{ fontSize: 12.5, width: "100%", padding: "7px 10px", borderRadius: 6 }}
-                    />
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      {/* Hour Select */}
+                      <select
+                        value={scheduleTime.split(":")[0]}
+                        onChange={(e) => {
+                          const mins = scheduleTime.split(":")[1] || "00";
+                          setScheduleTime(`${e.target.value}:${mins}`);
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: "8px 10px",
+                          borderRadius: 8,
+                          border: "1.5px solid #E2E8F0",
+                          background: "#FFFFFF",
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: "#0F172A",
+                          cursor: "pointer",
+                          outline: "none",
+                          appearance: "none",
+                          textAlign: "center",
+                        }}
+                      >
+                        {Array.from({ length: 24 }, (_, i) => {
+                          const val = String(i).padStart(2, "0");
+                          const h12 = i === 0 ? 12 : i > 12 ? i - 12 : i;
+                          const ampm = i >= 12 ? "PM" : "AM";
+                          return <option key={val} value={val}>{h12} {ampm}</option>;
+                        })}
+                      </select>
+
+                      <span style={{ fontSize: 16, fontWeight: 800, color: "#334155" }}>:</span>
+
+                      {/* Minute Select */}
+                      <select
+                        value={scheduleTime.split(":")[1] || "00"}
+                        onChange={(e) => {
+                          const hrs = scheduleTime.split(":")[0] || "18";
+                          setScheduleTime(`${hrs}:${e.target.value}`);
+                        }}
+                        style={{
+                          flex: 1,
+                          padding: "8px 10px",
+                          borderRadius: 8,
+                          border: "1.5px solid #E2E8F0",
+                          background: "#FFFFFF",
+                          fontSize: 13,
+                          fontWeight: 700,
+                          color: "#0F172A",
+                          cursor: "pointer",
+                          outline: "none",
+                          appearance: "none",
+                          textAlign: "center",
+                        }}
+                      >
+                        {Array.from({ length: 60 }, (_, i) => {
+                          const val = String(i).padStart(2, "0");
+                          return <option key={val} value={val}>{val}</option>;
+                        })}
+                      </select>
+                    </div>
                   </div>
 
                   <div style={{ fontSize: 11, color: "#64748B", background: "#F8FAFC", padding: "6px 8px", borderRadius: 6 }}>

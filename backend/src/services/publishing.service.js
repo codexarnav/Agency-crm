@@ -188,6 +188,7 @@ export const getPublishingQueue = async (companyId, filters = {}) => {
     if (search && search.trim() !== "") {
         const query = search.trim();
         where.OR = [
+            { title: { contains: query, mode: "insensitive" } },
             { caption: { contains: query, mode: "insensitive" } },
             {
                 client: {
@@ -216,7 +217,7 @@ export const getPublishingQueue = async (companyId, filters = {}) => {
             manager: true,
         },
         orderBy: {
-            scheduledAt: "asc", // Show soonest scheduled jobs first in queue
+            scheduledAt: "desc", // Show latest scheduled jobs first in queue
         },
     });
 

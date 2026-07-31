@@ -70,8 +70,14 @@ async function processSingleJob(job) {
       }
     }
 
-    // Format post body
-    let postBody = pubJob.caption || pubJob.title || (pubJob.task ? pubJob.task.title : (pubJob.shoot ? pubJob.shoot.title : ""));
+    // Format post body (caption/description) and title separately
+    let postBody = pubJob.caption || "";
+    let postTitle = pubJob.title || (pubJob.task ? pubJob.task.title : (pubJob.shoot ? pubJob.shoot.title : null));
+
+    // If no caption but we have a title, use title as body fallback for platforms that need body text
+    if (!postBody && postTitle) {
+      postBody = postTitle;
+    }
 
     let externalPostId = null;
 
@@ -79,7 +85,8 @@ async function processSingleJob(job) {
     const result = await publishPost(
       [socialConn.postproxyProfileId],
       postBody,
-      mediaList
+      mediaList,
+      postTitle
     );
     externalPostId = result.id;
 
