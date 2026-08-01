@@ -66,12 +66,23 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
   const getSmartScheduleDateTime = (targetTime = "18:00", requestedDate = null) => {
     const now = new Date();
     const [h, m] = targetTime.split(":").map(Number);
-    const dateStr = requestedDate || now.toISOString().split("T")[0];
+    const todayStr = now.toISOString().split("T")[0];
+    const dateStr = requestedDate || todayStr;
     const [yr, mo, dy] = dateStr.split("-").map(Number);
     const checkObj = new Date(yr, mo - 1, dy, h, m, 0);
 
-    if (now > checkObj) {
-      // If time for this day has passed, set date to tomorrow!
+    // Only auto-advance if the requested date is today (or no date given) and the time has passed
+    const isToday = dateStr === todayStr;
+    if (isToday && now > checkObj) {
+      // Time for today has already passed — auto-advance to tomorrow
+      const nextDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      const yyyy = nextDay.getFullYear();
+      const mm = String(nextDay.getMonth() + 1).padStart(2, "0");
+      const dd = String(nextDay.getDate()).padStart(2, "0");
+      return { date: `${yyyy}-${mm}-${dd}`, time: targetTime };
+    }
+    // If the requested date is in the past entirely (before today), also advance to tomorrow with that time
+    if (now > checkObj && !isToday) {
       const nextDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
       const yyyy = nextDay.getFullYear();
       const mm = String(nextDay.getMonth() + 1).padStart(2, "0");
@@ -89,6 +100,11 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
   // Preview State (cover = Thumbnail, video = Media View)
   const [previewTab, setPreviewTab] = useState("video");
   const [submitting, setSubmitting] = useState(false);
+
+  // Confirmation dialog states
+  const [confirmPostNow, setConfirmPostNow] = useState(false);
+  const [confirmExit, setConfirmExit] = useState(false);
+  const [pendingSubmitMode, setPendingSubmitMode] = useState(null);
 
   // UI Dropdown & Popover states
   const [publishDropdownOpen, setPublishDropdownOpen] = useState(false);
@@ -252,14 +268,44 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
       const brandName = selectedClient?.brandName || selectedClient?.companyName || "Our Brand";
       const sampleTitle = title || "Exciting Announcement";
       const generated = `🚀 Big news from ${brandName}! We're thrilled to introduce ${sampleTitle}.\n\n✨ Key Highlights:\n- Premium performance & modern design\n- Built specifically for modern agency workflows\n- Seamless social integration across platforms\n\n👉 Double tap if you're excited! Link in bio to learn more.\n\n#AgencyLife #${brandName.replace(/\s+/g, "")} #SocialMediaMarketing #Growth`;
-      
+
       setCaption(generated);
       setAiLoading(false);
       showToast("✨ AI Caption generated successfully!", "success");
     }, 900);
   };
 
-  // Submit Handler
+  // Trigger confirmation before posting now, or direct submit for schedule
+  const handleSubmitWithConfirm = (overrideMode = null) => {
+    const activeMode = overrideMode || timingMode;
+    // Validate first before showing confirm
+    if (!clientId) {
+      showToast("Please select a client", "danger");
+      return;
+    }
+    if (selectedPlatforms.length === 0) {
+      showToast("Please select at least one platform", "danger");
+      return;
+    }
+    if (!title && !caption) {
+      showToast("Please enter a title or caption", "danger");
+      return;
+    }
+
+    if (activeMode === "post_now") {
+      // Show confirmation dialog for post now
+      setPendingSubmitMode("post_now");
+      setConfirmPostNow(true);
+    } else {
+      // For schedule, re-validate that scheduled time isn't in the past at submit time
+      const smart = getSmartScheduleDateTime(scheduleTime, scheduleDate);
+      setScheduleDate(smart.date);
+      setScheduleTime(smart.time);
+      handleSubmit("schedule");
+    }
+  };
+
+  // Submit Handler (actually performs the API call)
   const handleSubmit = async (overrideMode = null) => {
     const activeMode = overrideMode || timingMode;
     if (!clientId) {
@@ -279,7 +325,9 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
       setSubmitting(true);
       let scheduledAt = null;
       if (activeMode === "schedule") {
-        scheduledAt = new Date(`${scheduleDate}T${scheduleTime}:00`).toISOString();
+        // Re-validate schedule time at submit — auto-advance if past
+        const smart = getSmartScheduleDateTime(scheduleTime, scheduleDate);
+        scheduledAt = new Date(`${smart.date}T${smart.time}:00`).toISOString();
       }
 
       const payload = {
@@ -309,15 +357,34 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
       showToast(err.message || "Failed to create post", "danger");
     } finally {
       setSubmitting(false);
+      setConfirmPostNow(false);
+      setPendingSubmitMode(null);
     }
+  };
+
+  // Close handler with confirmation
+  const handleCloseRequest = () => {
+    // If user has entered any data, show confirmation
+    const hasData = title || caption || mediaUrl || thumbnailUrl;
+    if (hasData) {
+      setConfirmExit(true);
+    } else {
+      onClose();
+    }
+  };
+
+  const handleConfirmExit = () => {
+    setConfirmExit(false);
+    resetForm();
+    onClose();
   };
 
   if (!open) return null;
 
   return (
-    <Modal open={open} onClose={onClose} size="fullscreen" hideHeader>
+    <Modal open={open} onClose={handleCloseRequest} size="fullscreen" hideHeader>
       <div style={{ display: "flex", flexDirection: "column", height: "calc(90vh - 70px)", background: "#FAFAFA", borderRadius: 0, overflow: "hidden", margin: "-24px" }}>
-        
+
         {/* Hidden File Inputs for Interactive Preview */}
         <input
           type="file"
@@ -352,7 +419,7 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
             {/* Close button */}
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleCloseRequest}
               aria-label="Close modal"
               style={{
                 background: "transparent",
@@ -406,10 +473,10 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
 
         {/* ── MAIN BODY: LEFT FORM / RIGHT INTERACTIVE PREVIEW PANEL ─── */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 410px", flex: 1, minHeight: 0 }}>
-          
+
           {/* LEFT FORM COLUMN (Post Details Metadata & Copywriting Only) */}
           <div style={{ overflowY: "auto", padding: "24px 28px", display: "flex", flexDirection: "column", gap: 18 }}>
-            
+
             {/* Side-by-Side: Select Client & Content Format */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
               {/* Select Client */}
@@ -633,13 +700,13 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
 
           {/* RIGHT COLUMN: INTERACTIVE LIVE PREVIEW & MEDIA UPLOAD SURFACE */}
           <div style={{ background: "#F8FAFC", borderLeft: "1px solid #E2E8F0", padding: 18, overflowY: "auto", display: "flex", flexDirection: "column", gap: 14 }}>
-            
+
             {/* Header with Mode Toggle */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <h3 style={{ fontSize: 13.5, fontWeight: 800, color: "#0F172A", margin: 0, display: "flex", alignItems: "center", gap: 6 }}>
                 📱 Live Post Preview
               </h3>
-              
+
               <div style={{ display: "flex", background: "#E2E8F0", borderRadius: 6, padding: 2 }}>
                 <button
                   type="button"
@@ -682,7 +749,7 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
 
             {/* Interactive Mock Social Preview Card */}
             <div style={{ background: "#FFFFFF", borderRadius: 12, boxShadow: "0 4px 16px rgba(0,0,0,0.05)", border: "1px solid #E2E8F0", overflow: "hidden" }}>
-              
+
               {/* Account Header */}
               <div style={{ padding: "10px 12px", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid #F1F5F9" }}>
                 <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg, #FF6A00, #EC4899)", color: "#FFF", fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>
@@ -731,7 +798,7 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                       /* Thumbnail Loaded state with overlay actions */
                       <div style={{ width: "100%", height: "100%", position: "relative" }} className="media-preview-hover-container">
                         <img src={thumbnailUrl} alt="Thumbnail preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                        
+
                         {/* Overlay Controls */}
                         <div style={{
                           position: "absolute",
@@ -745,8 +812,8 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                           opacity: 0,
                           transition: "opacity 0.2s ease",
                         }}
-                        onMouseEnter={(e) => e.currentTarget.style.opacity = 1}
-                        onMouseLeave={(e) => e.currentTarget.style.opacity = 0}
+                          onMouseEnter={(e) => e.currentTarget.style.opacity = 1}
+                          onMouseLeave={(e) => e.currentTarget.style.opacity = 0}
                         >
                           <button
                             type="button"
@@ -870,8 +937,8 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                           opacity: 0,
                           transition: "opacity 0.2s ease",
                         }}
-                        onMouseEnter={(e) => e.currentTarget.style.opacity = 1}
-                        onMouseLeave={(e) => e.currentTarget.style.opacity = 0}
+                          onMouseEnter={(e) => e.currentTarget.style.opacity = 1}
+                          onMouseLeave={(e) => e.currentTarget.style.opacity = 0}
                         >
                           <button
                             type="button"
@@ -1001,8 +1068,8 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                 <span>⚡ Scheduled to publish <strong>immediately</strong> upon submission.</span>
               ) : (() => {
                 const [yr, mo, dy] = scheduleDate.split("-");
-                const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-                const formattedDate = `${parseInt(dy)} ${months[parseInt(mo)-1]} ${yr}`;
+                const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                const formattedDate = `${parseInt(dy)} ${months[parseInt(mo) - 1]} ${yr}`;
                 const [hh, mm] = scheduleTime.split(":");
                 const h = parseInt(hh);
                 const ampm = h >= 12 ? "PM" : "AM";
@@ -1018,13 +1085,13 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
 
         {/* ── STICKY FOOTER CONTAINER & SPLIT PUBLISH DROPDOWN ──────────── */}
         <div style={{ background: "#FFFFFF", borderTop: "1px solid #E2E8F0", padding: "12px 24px", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0, position: "relative" }}>
-          
+
           <div style={{ fontSize: 12, color: "#64748B" }}>
             {selectedPlatforms.length > 0 ? `Targeting ${selectedPlatforms.length} social platforms` : "No platforms selected"}
           </div>
 
           <div style={{ display: "flex", gap: 10, alignItems: "center", position: "relative" }} ref={publishContainerRef}>
-            <Btn variant="outline" type="button" onClick={onClose} disabled={submitting}>
+            <Btn variant="outline" type="button" onClick={handleCloseRequest} disabled={submitting}>
               Cancel
             </Btn>
 
@@ -1047,11 +1114,11 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
 
             {/* ── SPLIT DROPDOWN BUTTON (GitHub / Vercel / Linear Style) ── */}
             <div style={{ display: "inline-flex", borderRadius: 8, overflow: "visible", boxShadow: "0 1.5px 4px rgba(255,106,0,0.25)" }}>
-              
+
               {/* Primary Action Trigger */}
               <button
                 type="button"
-                onClick={() => handleSubmit(timingMode)}
+                onClick={() => handleSubmitWithConfirm(timingMode)}
                 disabled={submitting}
                 style={{
                   padding: "8px 16px",
@@ -1072,8 +1139,8 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                 {submitting
                   ? "Processing..."
                   : timingMode === "post_now"
-                  ? "⚡ Publish Now"
-                  : (() => {
+                    ? "⚡ Publish Now"
+                    : (() => {
                       const [hh, mm] = scheduleTime.split(":");
                       const h = parseInt(hh);
                       const ampm = h >= 12 ? "PM" : "AM";
@@ -1131,7 +1198,7 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
                   onClick={() => {
                     setTimingMode("post_now");
                     setPublishDropdownOpen(false);
-                    handleSubmit("post_now");
+                    handleSubmitWithConfirm("post_now");
                   }}
                   style={{
                     width: "100%",
@@ -1431,6 +1498,187 @@ export default function CreatePostModal({ open, onClose, onSuccess }) {
         </div>
 
       </div>
+
+      {/* ── CONFIRMATION DIALOG: Post Now ─────────────────────────── */}
+      {confirmPostNow && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 10000,
+          background: "rgba(15, 23, 42, 0.6)",
+          backdropFilter: "blur(4px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          animation: "fadeIn 0.15s ease-out",
+        }}>
+          <div style={{
+            background: "#FFFFFF",
+            borderRadius: 16,
+            padding: "28px 32px",
+            width: 380,
+            boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+            border: "1px solid #E2E8F0",
+            textAlign: "center",
+          }}>
+            <div style={{
+              width: 48,
+              height: 48,
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #FFF7ED, #FFEDD5)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 16px",
+              fontSize: 22,
+            }}>
+              ⚡
+            </div>
+            <h3 style={{ fontSize: 17, fontWeight: 800, color: "#0F172A", margin: "0 0 8px" }}>
+              Publish Now?
+            </h3>
+            <p style={{ fontSize: 13, color: "#64748B", margin: "0 0 24px", lineHeight: 1.5 }}>
+              Are you sure you want to proceed? Your post will be published immediately to{" "}
+              <strong>{selectedPlatforms.length} platform{selectedPlatforms.length !== 1 ? "s" : ""}</strong>.
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+              <button
+                type="button"
+                onClick={() => { setConfirmPostNow(false); setPendingSubmitMode(null); }}
+                style={{
+                  padding: "9px 20px",
+                  borderRadius: 8,
+                  border: "1px solid #CBD5E1",
+                  background: "#FFFFFF",
+                  color: "#334155",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#F8FAFC"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "#FFFFFF"; }}
+              >
+                Go Back
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSubmit("post_now")}
+                disabled={submitting}
+                style={{
+                  padding: "9px 24px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: "linear-gradient(135deg, #FF6A00, #FF8C33)",
+                  color: "#FFFFFF",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  boxShadow: "0 2px 8px rgba(255, 106, 0, 0.35)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  transition: "all 0.15s ease",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(255, 106, 0, 0.45)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(255, 106, 0, 0.35)"; }}
+              >
+                {submitting ? "Publishing..." : "⚡ Yes, Publish Now"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CONFIRMATION DIALOG: Exit / Close ─────────────────────── */}
+      {confirmExit && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 10000,
+          background: "rgba(15, 23, 42, 0.6)",
+          backdropFilter: "blur(4px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          animation: "fadeIn 0.15s ease-out",
+        }}>
+          <div style={{
+            background: "#FFFFFF",
+            borderRadius: 16,
+            padding: "28px 32px",
+            width: 380,
+            boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+            border: "1px solid #E2E8F0",
+            textAlign: "center",
+          }}>
+            <div style={{
+              width: 48,
+              height: 48,
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #FEF2F2, #FEE2E2)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 16px",
+              fontSize: 22,
+            }}>
+              🚪
+            </div>
+            <h3 style={{ fontSize: 17, fontWeight: 800, color: "#0F172A", margin: "0 0 8px" }}>
+              Exit without saving?
+            </h3>
+            <p style={{ fontSize: 13, color: "#64748B", margin: "0 0 24px", lineHeight: 1.5 }}>
+              Are you sure you want to exit? Any unsaved changes to your post will be lost.
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+              <button
+                type="button"
+                onClick={() => setConfirmExit(false)}
+                style={{
+                  padding: "9px 20px",
+                  borderRadius: 8,
+                  border: "1px solid #CBD5E1",
+                  background: "#FFFFFF",
+                  color: "#334155",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#F8FAFC"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = "#FFFFFF"; }}
+              >
+                Stay & Continue
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmExit}
+                style={{
+                  padding: "9px 24px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: "linear-gradient(135deg, #EF4444, #F87171)",
+                  color: "#FFFFFF",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  boxShadow: "0 2px 8px rgba(239, 68, 68, 0.35)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                  transition: "all 0.15s ease",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(239, 68, 68, 0.45)"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(239, 68, 68, 0.35)"; }}
+              >
+                Yes, Exit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </Modal>
   );
 }
