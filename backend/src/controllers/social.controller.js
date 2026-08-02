@@ -18,25 +18,32 @@ export const getSocialConnections = async (req, res) => {
             where: { clientId: clientId }
         });
 
-        // Initialize with default platforms for UI safety
+        // Helper to normalize platform names
+        const normalizePlatform = (p) => {
+            if (!p) return "";
+            const lower = p.toLowerCase();
+            if (lower.includes("facebook")) return "facebook";
+            if (lower.includes("instagram")) return "instagram";
+            if (lower.includes("linkedin")) return "linkedin";
+            if (lower.includes("youtube") || lower.includes("google")) return "youtube";
+            if (lower.includes("twitter") || lower === "x") return "twitter";
+            if (lower.includes("tiktok")) return "tiktok";
+            return lower;
+        };
+
+        // Initialize with default platforms for UI safety across all supported channels
         const data = {
-            instagram: {
-                connected: false,
-                username: "",
-                businessId: "",
-                connectedAt: null,
-            },
-            facebook: {
-                connected: false,
-                pageName: "",
-                pageId: "",
-                connectedAt: null,
-            }
+            instagram: { connected: false, username: "", businessId: "", connectedAt: null },
+            facebook: { connected: false, pageName: "", pageId: "", connectedAt: null },
+            linkedin: { connected: false, username: "", businessId: "", connectedAt: null },
+            youtube: { connected: false, username: "", businessId: "", connectedAt: null },
+            twitter: { connected: false, username: "", businessId: "", connectedAt: null },
+            tiktok: { connected: false, username: "", businessId: "", connectedAt: null },
         };
 
         // Populate connected platforms dynamically
         for (const conn of connections) {
-            const platform = conn.platform.toLowerCase();
+            const platform = normalizePlatform(conn.platform);
             data[platform] = {
                 connected: true,
                 username: conn.profileName || "",

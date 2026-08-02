@@ -95,9 +95,21 @@ export const schedulePost = async (data, loggedInUser) => {
         throw new Error("At least one platform must be selected");
     }
 
-    const connectedPlatforms = socialConns.map(c => c.platform.toLowerCase());
+    const normalizePlatform = (p) => {
+        if (!p) return "";
+        const lower = p.toLowerCase();
+        if (lower.includes("facebook")) return "facebook";
+        if (lower.includes("instagram")) return "instagram";
+        if (lower.includes("linkedin")) return "linkedin";
+        if (lower.includes("youtube") || lower.includes("google")) return "youtube";
+        if (lower.includes("twitter") || lower === "x") return "twitter";
+        if (lower.includes("tiktok")) return "tiktok";
+        return lower;
+    };
+
+    const connectedPlatforms = socialConns.map(c => normalizePlatform(c.platform));
     for (const p of targetPlatforms) {
-        if (!connectedPlatforms.includes(p.toLowerCase())) {
+        if (!connectedPlatforms.includes(normalizePlatform(p))) {
             throw new Error(`Platform ${p} is not connected for this client`);
         }
     }
@@ -465,15 +477,27 @@ export const getSocialStatus = async (clientId, companyId) => {
         where: { clientId },
     });
 
-    const facebookConn = socialConns.find(c => c.platform.toLowerCase() === "facebook");
-    const instagramConn = socialConns.find(c => c.platform.toLowerCase() === "instagram");
-    const twitterConn = socialConns.find(c => c.platform.toLowerCase() === "twitter");
-    const linkedinConn = socialConns.find(c => c.platform.toLowerCase() === "linkedin");
-    const youtubeConn = socialConns.find(c => c.platform.toLowerCase() === "youtube");
-    const tiktokConn = socialConns.find(c => c.platform.toLowerCase() === "tiktok");
+    const normalizePlatform = (p) => {
+        if (!p) return "";
+        const lower = p.toLowerCase();
+        if (lower.includes("facebook")) return "facebook";
+        if (lower.includes("instagram")) return "instagram";
+        if (lower.includes("linkedin")) return "linkedin";
+        if (lower.includes("youtube") || lower.includes("google")) return "youtube";
+        if (lower.includes("twitter") || lower === "x") return "twitter";
+        if (lower.includes("tiktok")) return "tiktok";
+        return lower;
+    };
+
+    const facebookConn = socialConns.find(c => normalizePlatform(c.platform) === "facebook");
+    const instagramConn = socialConns.find(c => normalizePlatform(c.platform) === "instagram");
+    const twitterConn = socialConns.find(c => normalizePlatform(c.platform) === "twitter");
+    const linkedinConn = socialConns.find(c => normalizePlatform(c.platform) === "linkedin");
+    const youtubeConn = socialConns.find(c => normalizePlatform(c.platform) === "youtube");
+    const tiktokConn = socialConns.find(c => normalizePlatform(c.platform) === "tiktok");
 
     return {
-        connectedPlatforms: socialConns.map(c => c.platform.toLowerCase()),
+        connectedPlatforms: socialConns.map(c => normalizePlatform(c.platform)),
         clientName: client.companyName || client.brandName || "Client",
         connected: socialConns.length > 0,
         facebookConnected: !!facebookConn,

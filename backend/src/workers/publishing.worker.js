@@ -50,12 +50,24 @@ async function processSingleJob(job) {
   const isLastAttempt = (attemptsMade + 1) >= maxAttempts;
 
   try {
-    const socialConn = await prisma.socialConnection.findFirst({
-      where: {
-        clientId: pubJob.clientId,
-        platform: pubJob.platform.toLowerCase()
-      }
+    const normalizePlatform = (p) => {
+      if (!p) return "";
+      const lower = p.toLowerCase();
+      if (lower.includes("facebook")) return "facebook";
+      if (lower.includes("instagram")) return "instagram";
+      if (lower.includes("linkedin")) return "linkedin";
+      if (lower.includes("youtube") || lower.includes("google")) return "youtube";
+      if (lower.includes("twitter") || lower === "x") return "twitter";
+      if (lower.includes("tiktok")) return "tiktok";
+      return lower;
+    };
+
+    const targetPlatform = normalizePlatform(pubJob.platform);
+    const socialConns = await prisma.socialConnection.findMany({
+      where: { clientId: pubJob.clientId }
     });
+    const socialConn = socialConns.find(c => normalizePlatform(c.platform) === targetPlatform);
+
     if (!socialConn) {
       throw new Error(`Client "${pubJob.client.companyName}" has no connected profile for platform "${pubJob.platform}"`);
     }
@@ -68,6 +80,14 @@ async function processSingleJob(job) {
       } else if (pubJob.shoot && pubJob.shoot.shootDraftUrl) {
         mediaList.push(pubJob.shoot.shootDraftUrl);
       }
+    }
+
+    // Validate platform-specific media requirements
+    if (targetPlatform === "youtube" && mediaList.length === 0) {
+      throw new Error(`Publishing to YouTube requires a valid video media file URL.`);
+    }
+    if (targetPlatform === "instagram" && mediaList.length === 0) {
+      throw new Error(`Publishing to Instagram requires an image or video media URL.`);
     }
 
     // Format post title and body (caption/description) separately

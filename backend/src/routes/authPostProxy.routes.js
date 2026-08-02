@@ -156,13 +156,26 @@ router.get("/postproxy/callback", async (req, res) => {
             console.warn("⚠️ No connected profiles returned from PostProxy for group:", groupId);
         }
 
+        const normalizePlatform = (p) => {
+            if (!p) return "";
+            const lower = p.toLowerCase();
+            if (lower.includes("facebook")) return "facebook";
+            if (lower.includes("instagram")) return "instagram";
+            if (lower.includes("linkedin")) return "linkedin";
+            if (lower.includes("youtube") || lower.includes("google")) return "youtube";
+            if (lower.includes("twitter") || lower === "x") return "twitter";
+            if (lower.includes("tiktok")) return "tiktok";
+            return lower;
+        };
+
         // Synchronize profiles in database
         for (const profile of profiles) {
+            const platformKey = normalizePlatform(profile.platform);
             await prisma.socialConnection.upsert({
                 where: {
                     clientId_platform: {
                         clientId: clientId,
-                        platform: profile.platform.toLowerCase()
+                        platform: platformKey
                     }
                 },
                 update: {
@@ -172,7 +185,7 @@ router.get("/postproxy/callback", async (req, res) => {
                 },
                 create: {
                     clientId: clientId,
-                    platform: profile.platform.toLowerCase(),
+                    platform: platformKey,
                     postproxyProfileId: profile.id,
                     profileName: profile.username || profile.name || "",
                     profileGroupId: groupId
