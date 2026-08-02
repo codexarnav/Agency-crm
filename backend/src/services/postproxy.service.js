@@ -129,31 +129,71 @@ export const getProfiles = async (groupId) => {
  * @param {string} body - The caption/content of the post
  * @param {string[]} mediaUrls - Array of image/video URLs
  * @param {string} [title] - Optional title for platforms that support it (e.g., YouTube)
+ * @param {string} [platform] - Optional platform name (e.g., "youtube", "instagram", "facebook")
  * @returns {Promise<{id: string, status: string}>}
  */
-export const publishPost = async (profileIds, body, mediaUrls = [], title = null) => {
+export const publishPost = async (profileIds, body, mediaUrls = [], title = null, platform = null) => {
     const url = `${getBaseUrl()}/api/posts`;
-    const postPayload = { body };
-    if (title) {
-        postPayload.title = title;
+    const cleanTitle = title && title.trim() ? title.trim() : null;
+
+    // Post body payload
+    const postPayload = {
+        body: body || ""
+    };
+    if (cleanTitle) {
+        postPayload.title = cleanTitle;
+        postPayload.caption_title = cleanTitle;
+        postPayload.headline = cleanTitle;
     }
+
+    // Top-level payload structure for PostProxy
+    const requestBody = {
+        post: postPayload,
+        profiles: profileIds,
+        media: mediaUrls || []
+    };
+
+    // Include title at top-level and in platform-specific options for maximum compatibility
+    if (cleanTitle) {
+        requestBody.title = cleanTitle;
+        requestBody.post_title = cleanTitle;
+        requestBody.video_title = cleanTitle;
+        requestBody.options = {
+            title: cleanTitle,
+            youtube: {
+                title: cleanTitle,
+                privacyStatus: "public"
+            },
+            facebook: {
+                title: cleanTitle
+            },
+            instagram: {
+                title: cleanTitle
+            }
+        };
+    }
+
+    // Also include top-level body for APIs that require it
+    if (body) {
+        requestBody.body = body;
+    }
+
+    console.log("Posting to PostProxy API:", JSON.stringify(requestBody, null, 2));
+
     const response = await fetch(url, {
         method: "POST",
         headers: getHeaders(),
-        body: JSON.stringify({
-            post: postPayload,
-            profiles: profileIds,
-            media: mediaUrls
-        })
+        body: JSON.stringify(requestBody)
     });
 
     const data = await response.json();
     if (!response.ok) {
+        console.error("PostProxy API returned error:", data);
         throw new Error(data.message || `PostProxy Error: Failed to publish post (${response.status})`);
     }
 
     return {
-        id: data.id,
+        id: data.id || data.post_id || data.data?.id,
         status: data.status || "PUBLISHED"
     };
 };

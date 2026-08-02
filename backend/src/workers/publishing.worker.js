@@ -70,23 +70,33 @@ async function processSingleJob(job) {
       }
     }
 
-    // Format post body (caption/description) and title separately
-    let postBody = pubJob.caption || "";
-    let postTitle = pubJob.title || (pubJob.task ? pubJob.task.title : (pubJob.shoot ? pubJob.shoot.title : null));
+    // Format post title and body (caption/description) separately
+    let rawTitle = pubJob.title || (pubJob.task ? pubJob.task.title : (pubJob.shoot ? pubJob.shoot.title : ""));
+    let rawCaption = pubJob.caption || "";
 
-    // If no caption but we have a title, use title as body fallback for platforms that need body text
+    let postTitle = (rawTitle || "").trim();
+    let postBody = (rawCaption || "").trim();
+
+    // Fallbacks to ensure platforms like YouTube (which require a video title) never receive an empty title
+    if (!postTitle && postBody) {
+      // Use the first line or first 80 chars of caption as the title fallback
+      const firstLine = postBody.split("\n")[0].trim();
+      postTitle = firstLine.length > 80 ? firstLine.substring(0, 77) + "..." : firstLine;
+    }
+
     if (!postBody && postTitle) {
       postBody = postTitle;
     }
 
     let externalPostId = null;
 
-    console.log(`Publishing to PostProxy using profile ID: ${socialConn.postproxyProfileId} for platform ${pubJob.platform}`);
+    console.log(`Publishing to PostProxy using profile ID: ${socialConn.postproxyProfileId} for platform ${pubJob.platform} with title: "${postTitle}"`);
     const result = await publishPost(
       [socialConn.postproxyProfileId],
       postBody,
       mediaList,
-      postTitle
+      postTitle,
+      pubJob.platform
     );
     externalPostId = result.id;
 

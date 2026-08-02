@@ -109,6 +109,7 @@ export default function ScheduleModal({ open, onClose, task, shoot, onSuccess })
         try {
             const payload = {
                 platforms: selectedPlatforms,
+                title: task?.title || shoot?.title || "",
                 caption,
                 mediaUrls,
                 scheduledAt: scheduledAt.toISOString(),
