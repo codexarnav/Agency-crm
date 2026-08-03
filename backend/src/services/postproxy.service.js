@@ -116,10 +116,10 @@ export const getProfiles = async (groupId) => {
     }
 
     return profiles.map(p => ({
-        id: p.id,
-        platform: p.platform,
-        username: p.username || p.name || "",
-        name: p.name || ""
+        id: p.id || p.profile_id || p.profileId || p.id_string || String(p.id || ""),
+        platform: p.platform || p.provider || p.type || p.network || p.platform_name || p.account_type || "",
+        username: p.username || p.name || p.handle || p.screen_name || p.user_name || p.display_name || p.account_name || "",
+        name: p.name || p.username || p.handle || ""
     }));
 };
 

@@ -128,14 +128,14 @@ function ClientSocialOnboardingPage() {
                         <p style={{ fontSize: 12, color: "var(--muted)", margin: "4px 0 0" }}>{platform.desc}</p>
                       </div>
                     </div>
-                    
+
                     {/* Status Badge */}
-                    <span style={{ 
-                      fontSize: 11, 
-                      fontWeight: 700, 
-                      padding: "4px 10px", 
-                      borderRadius: 99, 
-                      background: conn.connected ? "var(--success)15" : "var(--border)", 
+                    <span style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: "4px 10px",
+                      borderRadius: 99,
+                      background: conn.connected ? "var(--success)15" : "var(--border)",
                       color: conn.connected ? "var(--success)" : "var(--muted)",
                       display: "flex",
                       alignItems: "center",
@@ -198,7 +198,7 @@ function ClientSocialOnboardingPage() {
       >
         <div style={{ padding: "4px 0" }}>
           <p style={{ fontSize: 13.5, color: "var(--dark)", lineHeight: 1.5, margin: "0 0 16px" }}>
-            To connect your business/brand social media account, we highly recommend using an <strong>Incognito / Private Window</strong>. 
+            To connect your business/brand social media account, we highly recommend using an <strong>Incognito / Private Window</strong>.
             Otherwise, your browser may automatically link your personal account instead.
           </p>
 

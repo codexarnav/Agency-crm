@@ -487,13 +487,13 @@ export const getSocialStatus = async (clientId, companyId) => {
 
     const normalizePlatform = (p) => {
         if (!p) return "";
-        const lower = p.toLowerCase();
-        if (lower.includes("facebook")) return "facebook";
-        if (lower.includes("instagram")) return "instagram";
+        const lower = p.toLowerCase().trim();
+        if (lower.includes("facebook") || lower.includes("fb")) return "facebook";
+        if (lower.includes("instagram") || lower.includes("ig")) return "instagram";
         if (lower.includes("linkedin")) return "linkedin";
-        if (lower.includes("youtube") || lower.includes("google")) return "youtube";
-        if (lower.includes("twitter") || lower === "x") return "twitter";
-        if (lower.includes("tiktok")) return "tiktok";
+        if (lower.includes("youtube") || lower.includes("google") || lower.includes("yt")) return "youtube";
+        if (lower.includes("twitter") || lower.includes("x") || lower === "x" || lower.startsWith("x_") || lower.startsWith("x-")) return "twitter";
+        if (lower.includes("tiktok") || lower.includes("tt")) return "tiktok";
         return lower;
     };
 
