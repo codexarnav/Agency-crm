@@ -47,10 +47,10 @@ router.get("/postproxy/connect", async (req, res) => {
             return res.redirect(getFrontendRedirectUrl(req, "client/settings/social?error=oauth_failed&reason=Missing+platform"));
         }
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        let clientId = decoded.id;
+        const userRole = (decoded.role || "").toUpperCase();
+        const isStaff = userRole.includes("ADMIN") || userRole.includes("MANAGER") || userRole.includes("EMPLOYEE") || userRole !== "CLIENT";
 
-        if ((decoded.role === "SUPER_ADMIN" || decoded.role === "MANAGER") && req.query.clientId) {
+        if (req.query.clientId && isStaff) {
             clientId = req.query.clientId;
             isAgent = true;
         }

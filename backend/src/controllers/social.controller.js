@@ -4,7 +4,9 @@ import prisma from "../config/prisma.js";
 export const getSocialConnections = async (req, res) => {
     try {
         let clientId = req.user.id;
-        if ((req.user.role === "SUPER_ADMIN" || req.user.role === "MANAGER") && req.query.clientId) {
+        const userRole = (req.user.role || "").toUpperCase();
+        const isStaff = userRole.includes("ADMIN") || userRole.includes("MANAGER") || userRole.includes("EMPLOYEE") || userRole !== "CLIENT";
+        if (req.query.clientId && isStaff) {
             clientId = req.query.clientId;
         }
 
@@ -72,7 +74,9 @@ export const getSocialConnections = async (req, res) => {
 export const disconnectFacebook = async (req, res) => {
     try {
         let clientId = req.user.id;
-        if ((req.user.role === "SUPER_ADMIN" || req.user.role === "MANAGER") && req.query.clientId) {
+        const userRole = (req.user.role || "").toUpperCase();
+        const isStaff = userRole.includes("ADMIN") || userRole.includes("MANAGER") || userRole.includes("EMPLOYEE") || userRole !== "CLIENT";
+        if (req.query.clientId && isStaff) {
             clientId = req.query.clientId;
         }
         await prisma.socialConnection.deleteMany({
@@ -92,7 +96,9 @@ export const disconnectFacebook = async (req, res) => {
 export const disconnectInstagram = async (req, res) => {
     try {
         let clientId = req.user.id;
-        if ((req.user.role === "SUPER_ADMIN" || req.user.role === "MANAGER") && req.query.clientId) {
+        const userRole = (req.user.role || "").toUpperCase();
+        const isStaff = userRole.includes("ADMIN") || userRole.includes("MANAGER") || userRole.includes("EMPLOYEE") || userRole !== "CLIENT";
+        if (req.query.clientId && isStaff) {
             clientId = req.query.clientId;
         }
         await prisma.socialConnection.deleteMany({
@@ -112,7 +118,9 @@ export const disconnectInstagram = async (req, res) => {
 export const disconnectPlatform = async (req, res) => {
     try {
         let clientId = req.user.id;
-        if ((req.user.role === "SUPER_ADMIN" || req.user.role === "MANAGER") && req.query.clientId) {
+        const userRole = (req.user.role || "").toUpperCase();
+        const isStaff = userRole.includes("ADMIN") || userRole.includes("MANAGER") || userRole.includes("EMPLOYEE") || userRole !== "CLIENT";
+        if (req.query.clientId && isStaff) {
             clientId = req.query.clientId;
         }
         const { platform } = req.params;
