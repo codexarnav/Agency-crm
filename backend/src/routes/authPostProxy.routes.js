@@ -5,30 +5,13 @@ import { createProfileGroup, initializeConnection, getProfiles, getProfileGroups
 
 const router = express.Router();
 
-const getFrontendRedirectUrl = (req, pathWithQuery) => {
-    let baseUrl = (process.env.FRONTEND_URL || "").replace(/\/$/, "");
-    if (!baseUrl && req) {
-        const referer = req.get("referer") || req.get("origin");
-        if (referer) {
-            try {
-                const urlObj = new URL(referer);
-                baseUrl = `${urlObj.protocol}//${urlObj.host}`;
-            } catch (e) {}
-        }
-    }
-    if (!baseUrl) {
-        baseUrl = "http://localhost:5173";
-    }
+const getFrontendRedirectUrl = (pathWithQuery) => {
+    const baseUrl = (process.env.FRONTEND_URL || "http://localhost:5173").replace(/\/$/, "");
     return `${baseUrl}/${pathWithQuery.replace(/^\//, "")}`;
 };
 
 const getBackendCallbackUrl = (req, clientId, isAgent = false) => {
-    let baseUrl = (process.env.BACKEND_URL || "").replace(/\/$/, "");
-    if (!baseUrl && req) {
-        const host = req.get("x-forwarded-host") || req.get("host");
-        const proto = req.get("x-forwarded-proto") || req.protocol || "https";
-        baseUrl = `${proto}://${host}`;
-    }
+    const baseUrl = (process.env.BACKEND_URL || `${req.protocol}://${req.get("host")}`).replace(/\/$/, "");
     return `${baseUrl}/auth/postproxy/callback?clientId=${clientId}${isAgent ? "&agent=true" : ""}`;
 };
 
@@ -39,18 +22,18 @@ router.get("/postproxy/connect", async (req, res) => {
         const { token, platform } = req.query;
         if (!token) {
             console.error("❌ Auth PostProxy: No token provided in query parameters");
-            return res.redirect(getFrontendRedirectUrl(req, "client/settings/social?error=oauth_failed&reason=Missing+token"));
+            return res.redirect(getFrontendRedirectUrl("client/settings/social?error=oauth_failed"));
         }
 
         if (!platform) {
             console.error("❌ Auth PostProxy: No platform provided in query parameters");
-            return res.redirect(getFrontendRedirectUrl(req, "client/settings/social?error=oauth_failed&reason=Missing+platform"));
+            return res.redirect(getFrontendRedirectUrl("client/settings/social?error=oauth_failed"));
         }
 
-        const userRole = (decoded.role || "").toUpperCase();
-        const isStaff = userRole.includes("ADMIN") || userRole.includes("MANAGER") || userRole.includes("EMPLOYEE") || userRole !== "CLIENT";
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        let clientId = decoded.id;
 
-        if (req.query.clientId && isStaff) {
+        if ((decoded.role === "SUPER_ADMIN" || decoded.role === "MANAGER") && req.query.clientId) {
             clientId = req.query.clientId;
             isAgent = true;
         }
@@ -63,9 +46,9 @@ router.get("/postproxy/connect", async (req, res) => {
         if (!client) {
             console.error(`❌ Auth PostProxy: Client not found for ID: ${clientId}`);
             if (isAgent) {
-                return res.redirect(getFrontendRedirectUrl(req, "clients?error=oauth_failed&reason=Client+not+found"));
+                return res.redirect(getFrontendRedirectUrl("clients?error=oauth_failed"));
             }
-            return res.redirect(getFrontendRedirectUrl(req, "client/settings/social?error=oauth_failed&reason=Client+not+found"));
+            return res.redirect(getFrontendRedirectUrl("client/settings/social?error=oauth_failed"));
         }
 
         let groupId = client.postproxyGroupId;
@@ -76,7 +59,7 @@ router.get("/postproxy/connect", async (req, res) => {
                 // Fetch all existing profile groups from PostProxy to see if there's an existing match or fallback
                 console.log("Fetching existing PostProxy profile groups...");
                 const existingGroups = await getProfileGroups();
-
+                
                 const targetName = (client.companyName || client.brandName || "").trim().toLowerCase();
                 let matchedGroup = null;
                 if (targetName) {
@@ -94,7 +77,7 @@ router.get("/postproxy/connect", async (req, res) => {
                         groupId = newGroup.id;
                     } catch (createError) {
                         console.warn("⚠️ Failed to create PostProxy profile group, checking for fallback:", createError.message);
-
+                        
                         // Fallback logic: check if any existing group can be used
                         if (existingGroups.length > 0) {
                             // Look for "Default" group, or just use the first available group
@@ -115,11 +98,10 @@ router.get("/postproxy/connect", async (req, res) => {
                 });
             } catch (groupError) {
                 console.error("❌ Failed to resolve PostProxy profile group:", groupError);
-                const reason = encodeURIComponent(groupError.message || "Group resolution failed");
                 if (isAgent) {
-                    return res.redirect(getFrontendRedirectUrl(req, `clients?error=oauth_failed&reason=${reason}`));
+                    return res.redirect(getFrontendRedirectUrl("clients?error=oauth_failed"));
                 }
-                return res.redirect(getFrontendRedirectUrl(req, `client/settings/social?error=oauth_failed&reason=${reason}`));
+                return res.redirect(getFrontendRedirectUrl("client/settings/social?error=oauth_failed"));
             }
         }
 
@@ -132,11 +114,10 @@ router.get("/postproxy/connect", async (req, res) => {
         return res.redirect(oauthUrl);
     } catch (error) {
         console.error("❌ Auth PostProxy Connect Error:", error);
-        const reason = encodeURIComponent(error.message || "Connect failed");
         if (isAgent) {
-            return res.redirect(getFrontendRedirectUrl(req, `clients?error=oauth_failed&reason=${reason}`));
+            return res.redirect(getFrontendRedirectUrl("clients?error=oauth_failed"));
         }
-        return res.redirect(getFrontendRedirectUrl(req, `client/settings/social?error=oauth_failed&reason=${reason}`));
+        return res.redirect(getFrontendRedirectUrl("client/settings/social?error=oauth_failed"));
     }
 });
 
@@ -146,11 +127,10 @@ router.get("/postproxy/callback", async (req, res) => {
 
     if (error || !clientId) {
         console.error("❌ PostProxy OAuth Callback Error or Client ID Missing:", error);
-        const reason = encodeURIComponent(error || "Client ID missing");
         if (agent === "true") {
-            return res.redirect(getFrontendRedirectUrl(req, `clients?error=oauth_failed&reason=${reason}`));
+            return res.redirect(getFrontendRedirectUrl("clients?error=oauth_failed"));
         }
-        return res.redirect(getFrontendRedirectUrl(req, `client/settings/social?error=oauth_failed&reason=${reason}`));
+        return res.redirect(getFrontendRedirectUrl("client/settings/social?error=oauth_failed"));
     }
 
     try {
@@ -161,65 +141,36 @@ router.get("/postproxy/callback", async (req, res) => {
         if (!client || !client.postproxyGroupId) {
             console.error(`❌ Client or profile group not found for ID: ${clientId}`);
             if (agent === "true") {
-                return res.redirect(getFrontendRedirectUrl(req, "clients?error=oauth_failed&reason=Client+group+not+found"));
+                return res.redirect(getFrontendRedirectUrl("clients?error=oauth_failed"));
             }
-            return res.redirect(getFrontendRedirectUrl(req, "client/settings/social?error=oauth_failed&reason=Client+group+not+found"));
+            return res.redirect(getFrontendRedirectUrl("client/settings/social?error=oauth_failed"));
         }
 
         const groupId = client.postproxyGroupId;
 
-        const normalizePlatform = (p) => {
-            if (!p) return "";
-            const lower = p.toLowerCase().trim();
-            if (lower.includes("facebook") || lower.includes("fb")) return "facebook";
-            if (lower.includes("instagram") || lower.includes("ig")) return "instagram";
-            if (lower.includes("linkedin")) return "linkedin";
-            if (lower.includes("youtube") || lower.includes("google") || lower.includes("yt")) return "youtube";
-            if (lower.includes("twitter") || lower.includes("x") || lower === "x" || lower.startsWith("x_") || lower.startsWith("x-")) return "twitter";
-            if (lower.includes("tiktok") || lower.includes("tt")) return "tiktok";
-            return lower;
-        };
-
         // Fetch all connected profiles for this group from PostProxy
         console.log(`Fetching PostProxy profiles for client: ${client.companyName || client.brandName} (group: ${groupId})`);
-        let profiles = await getProfiles(groupId);
-
-        // Retry logic if PostProxy is still finalizing profile creation on redirect
-        if (profiles.length === 0) {
-            for (let i = 0; i < 3; i++) {
-                console.log(`⚠️ Profiles empty, retrying PostProxy getProfiles (attempt ${i + 1}/3)...`);
-                await new Promise(r => setTimeout(r, 1000));
-                profiles = await getProfiles(groupId);
-                if (profiles.length > 0) break;
-            }
-        }
-
-        // Check if callback query params contain explicit profile data
-        const queryPlatform = req.query.platform || req.query.provider || req.query.type;
-        const queryProfileId = req.query.profile_id || req.query.profileId || req.query.id;
-        const queryUsername = req.query.username || req.query.name || req.query.handle;
-
-        if (queryPlatform && queryProfileId) {
-            const alreadyExists = profiles.some(p => String(p.id) === String(queryProfileId));
-            if (!alreadyExists) {
-                profiles.push({
-                    id: queryProfileId,
-                    platform: queryPlatform,
-                    username: queryUsername || "",
-                    name: queryUsername || ""
-                });
-            }
-        }
+        const profiles = await getProfiles(groupId);
 
         if (profiles.length === 0) {
             console.warn("⚠️ No connected profiles returned from PostProxy for group:", groupId);
         }
 
+        const normalizePlatform = (p) => {
+            if (!p) return "";
+            const lower = p.toLowerCase();
+            if (lower.includes("facebook")) return "facebook";
+            if (lower.includes("instagram")) return "instagram";
+            if (lower.includes("linkedin")) return "linkedin";
+            if (lower.includes("youtube") || lower.includes("google")) return "youtube";
+            if (lower.includes("twitter") || lower === "x") return "twitter";
+            if (lower.includes("tiktok")) return "tiktok";
+            return lower;
+        };
+
         // Synchronize profiles in database
         for (const profile of profiles) {
             const platformKey = normalizePlatform(profile.platform);
-            if (!platformKey) continue;
-
             await prisma.socialConnection.upsert({
                 where: {
                     clientId_platform: {
@@ -228,14 +179,14 @@ router.get("/postproxy/callback", async (req, res) => {
                     }
                 },
                 update: {
-                    postproxyProfileId: String(profile.id),
+                    postproxyProfileId: profile.id,
                     profileName: profile.username || profile.name || "",
                     profileGroupId: groupId
                 },
                 create: {
                     clientId: clientId,
                     platform: platformKey,
-                    postproxyProfileId: String(profile.id),
+                    postproxyProfileId: profile.id,
                     profileName: profile.username || profile.name || "",
                     profileGroupId: groupId
                 }
@@ -244,16 +195,15 @@ router.get("/postproxy/callback", async (req, res) => {
 
         console.log(`✅ PostProxy OAuth Callback Success for Client ${clientId}. Synced ${profiles.length} profiles.`);
         if (agent === "true") {
-            return res.redirect(getFrontendRedirectUrl(req, `clients?success=true&clientId=${clientId}`));
+            return res.redirect(getFrontendRedirectUrl(`clients?success=true&clientId=${clientId}`));
         }
-        return res.redirect(getFrontendRedirectUrl(req, "client/settings/social?success=true"));
+        return res.redirect(getFrontendRedirectUrl("client/settings/social?success=true"));
     } catch (err) {
         console.error("❌ PostProxy OAuth Callback Process Exception:", err);
-        const reason = encodeURIComponent(err.message || "Callback exception");
         if (agent === "true") {
-            return res.redirect(getFrontendRedirectUrl(req, `clients?error=oauth_failed&reason=${reason}`));
+            return res.redirect(getFrontendRedirectUrl("clients?error=oauth_failed"));
         }
-        return res.redirect(getFrontendRedirectUrl(req, `client/settings/social?error=oauth_failed&reason=${reason}`));
+        return res.redirect(getFrontendRedirectUrl("client/settings/social?error=oauth_failed"));
     }
 });
 

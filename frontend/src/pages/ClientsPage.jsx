@@ -111,16 +111,16 @@ function SocialConnectionsSection({ clientId, showToast }) {
               </div>
             </div>
             {isConnected ? (
-              <button
-                type="button"
+              <button 
+                type="button" 
                 onClick={() => handleDisconnect(platform.key, platform.name)}
                 style={{ background: "transparent", border: "none", color: "var(--danger)", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}
               >
                 Disconnect
               </button>
             ) : (
-              <button
-                type="button"
+              <button 
+                type="button" 
                 onClick={() => handleConnect(platform.key)}
                 style={{ background: "transparent", border: "none", color: "var(--primary)", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}
               >
@@ -282,10 +282,10 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
   const handleSubmit = () => {
     if (!validate()) return;
     const monthlyTotal = Object.values(form.deliverableBreakdown?.monthly || {}).reduce((a, b) => a + (parseInt(b) || 0), 0);
-
+    
     let emailVal = form.email ? form.email.trim() : "";
     let usernameVal = form.username;
-
+    
     if (!initial) {
       const cleanName = (form.name || "client").toLowerCase().replace(/[^a-z0-9]/g, "");
       const suffix = Math.floor(100 + Math.random() * 900);
@@ -316,7 +316,7 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
             onClose();
           }
         })
-        .catch(() => { });
+        .catch(() => {});
     } else {
       onSave(finalForm);
     }
@@ -366,7 +366,7 @@ function ClientFormModal({ open, onClose, initial, employees, managers, session,
       }
     >
       <div style={{ display: "flex", flexDirection: "column", gap: 24, maxHeight: "70vh", overflowY: "auto", paddingRight: 10 }}>
-
+        
         {/* Section 1: Client Profile */}
         <div>
           <h3 style={{ fontSize: 13.5, fontWeight: 700, color: "var(--primary)", borderBottom: "1px solid var(--border)", paddingBottom: 6, marginBottom: 14, textTransform: "uppercase", letterSpacing: "0.05em" }}>
@@ -729,7 +729,7 @@ function ClientDrawer({ client, open, onClose, tasks, employees, onEdit, canDele
           )}
 
           <div className="divider" style={{ margin: "10px 0 16px" }} />
-
+          
           <div style={{ marginBottom: 20 }}>
             <p style={{ fontSize: 11.5, color: "var(--muted)", marginBottom: 8, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>🔗 Connected Social Accounts</p>
             <SocialConnectionsSection clientId={client.id} showToast={showToast} />
@@ -819,7 +819,7 @@ function ClientsPage() {
       showToast("Social account connected successfully!", "success");
       window.history.replaceState({}, document.title, window.location.pathname);
       refreshClients();
-
+      
       if (connectedClientId) {
         const found = clients.find(c => c.id === connectedClientId);
         if (found) {

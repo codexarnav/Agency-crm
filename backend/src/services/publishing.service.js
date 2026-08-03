@@ -465,17 +465,9 @@ export const retryPublishingJob = async (id, companyId, loggedInUser) => {
  * Get client's social connection status
  */
 export const getSocialStatus = async (clientId, companyId) => {
-    let client = null;
-    if (companyId) {
-        client = await prisma.client.findFirst({
-            where: { id: clientId, companyId },
-        });
-    }
-    if (!client) {
-        client = await prisma.client.findUnique({
-            where: { id: clientId },
-        });
-    }
+    const client = await prisma.client.findFirst({
+        where: { id: clientId, companyId },
+    });
 
     if (!client) {
         throw new Error("Client not found");
@@ -487,13 +479,13 @@ export const getSocialStatus = async (clientId, companyId) => {
 
     const normalizePlatform = (p) => {
         if (!p) return "";
-        const lower = p.toLowerCase().trim();
-        if (lower.includes("facebook") || lower.includes("fb")) return "facebook";
-        if (lower.includes("instagram") || lower.includes("ig")) return "instagram";
+        const lower = p.toLowerCase();
+        if (lower.includes("facebook")) return "facebook";
+        if (lower.includes("instagram")) return "instagram";
         if (lower.includes("linkedin")) return "linkedin";
-        if (lower.includes("youtube") || lower.includes("google") || lower.includes("yt")) return "youtube";
-        if (lower.includes("twitter") || lower.includes("x") || lower === "x" || lower.startsWith("x_") || lower.startsWith("x-")) return "twitter";
-        if (lower.includes("tiktok") || lower.includes("tt")) return "tiktok";
+        if (lower.includes("youtube") || lower.includes("google")) return "youtube";
+        if (lower.includes("twitter") || lower === "x") return "twitter";
+        if (lower.includes("tiktok")) return "tiktok";
         return lower;
     };
 

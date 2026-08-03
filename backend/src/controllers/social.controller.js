@@ -3,20 +3,15 @@ import prisma from "../config/prisma.js";
 // GET /api/social/connections
 export const getSocialConnections = async (req, res) => {
     try {
-        let clientId = req.user.id;
-        const userRole = (req.user.role || "").toUpperCase();
-        const isStaff = userRole.includes("ADMIN") || userRole.includes("MANAGER") || userRole.includes("EMPLOYEE") || userRole !== "CLIENT";
-        if (req.query.clientId && isStaff) {
-            clientId = req.query.clientId;
-        }
+        const clientId = req.user.id;
 
-        // Verify that target client exists
+        // Verify that user is a client
         const client = await prisma.client.findUnique({
             where: { id: clientId }
         });
 
         if (!client) {
-            return res.status(404).json({ success: false, message: "Client not found" });
+            return res.status(403).json({ success: false, message: "Only clients can access social connection metadata" });
         }
 
         const connections = await prisma.socialConnection.findMany({
@@ -74,9 +69,7 @@ export const getSocialConnections = async (req, res) => {
 export const disconnectFacebook = async (req, res) => {
     try {
         let clientId = req.user.id;
-        const userRole = (req.user.role || "").toUpperCase();
-        const isStaff = userRole.includes("ADMIN") || userRole.includes("MANAGER") || userRole.includes("EMPLOYEE") || userRole !== "CLIENT";
-        if (req.query.clientId && isStaff) {
+        if ((req.user.role === "SUPER_ADMIN" || req.user.role === "MANAGER") && req.query.clientId) {
             clientId = req.query.clientId;
         }
         await prisma.socialConnection.deleteMany({
@@ -96,9 +89,7 @@ export const disconnectFacebook = async (req, res) => {
 export const disconnectInstagram = async (req, res) => {
     try {
         let clientId = req.user.id;
-        const userRole = (req.user.role || "").toUpperCase();
-        const isStaff = userRole.includes("ADMIN") || userRole.includes("MANAGER") || userRole.includes("EMPLOYEE") || userRole !== "CLIENT";
-        if (req.query.clientId && isStaff) {
+        if ((req.user.role === "SUPER_ADMIN" || req.user.role === "MANAGER") && req.query.clientId) {
             clientId = req.query.clientId;
         }
         await prisma.socialConnection.deleteMany({
@@ -118,9 +109,7 @@ export const disconnectInstagram = async (req, res) => {
 export const disconnectPlatform = async (req, res) => {
     try {
         let clientId = req.user.id;
-        const userRole = (req.user.role || "").toUpperCase();
-        const isStaff = userRole.includes("ADMIN") || userRole.includes("MANAGER") || userRole.includes("EMPLOYEE") || userRole !== "CLIENT";
-        if (req.query.clientId && isStaff) {
+        if ((req.user.role === "SUPER_ADMIN" || req.user.role === "MANAGER") && req.query.clientId) {
             clientId = req.query.clientId;
         }
         const { platform } = req.params;
