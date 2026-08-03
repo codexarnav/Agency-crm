@@ -22,6 +22,8 @@ function clientStatusMeta(status) {
 function SocialConnectionsSection({ clientId, showToast }) {
   const [connections, setConnections] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [guidePlatform, setGuidePlatform] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   const fetchConnections = async () => {
     try {
@@ -43,7 +45,7 @@ function SocialConnectionsSection({ clientId, showToast }) {
     }
   }, [clientId]);
 
-  const handleConnect = (platformKey) => {
+  const handleConnect = (platformKey, platformName) => {
     let backendHost = "";
     const apiEnv = import.meta.env.VITE_API_URL;
     if (apiEnv) {
@@ -59,7 +61,12 @@ function SocialConnectionsSection({ clientId, showToast }) {
     }
 
     const connectionUrl = `${backendHost}/auth/postproxy/connect?token=${token}&platform=${platformKey}&clientId=${clientId}`;
-    window.location.href = connectionUrl;
+    setGuidePlatform({
+      key: platformKey,
+      name: platformName,
+      url: connectionUrl
+    });
+    setCopied(false);
   };
 
   const handleDisconnect = async (platformKey, platformName) => {
@@ -111,17 +118,26 @@ function SocialConnectionsSection({ clientId, showToast }) {
               </div>
             </div>
             {isConnected ? (
-              <button 
-                type="button" 
-                onClick={() => handleDisconnect(platform.key, platform.name)}
-                style={{ background: "transparent", border: "none", color: "var(--danger)", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}
-              >
-                Disconnect
-              </button>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button 
+                  type="button" 
+                  onClick={() => handleConnect(platform.key, platform.name)}
+                  style={{ background: "transparent", border: "none", color: "var(--primary)", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}
+                >
+                  Reconnect
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => handleDisconnect(platform.key, platform.name)}
+                  style={{ background: "transparent", border: "none", color: "var(--danger)", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}
+                >
+                  Disconnect
+                </button>
+              </div>
             ) : (
               <button 
                 type="button" 
-                onClick={() => handleConnect(platform.key)}
+                onClick={() => handleConnect(platform.key, platform.name)}
                 style={{ background: "transparent", border: "none", color: "var(--primary)", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}
               >
                 Connect
@@ -130,6 +146,82 @@ function SocialConnectionsSection({ clientId, showToast }) {
           </div>
         );
       })}
+
+      {/* Pre-Connection Guide Modal */}
+      <Modal
+        open={!!guidePlatform}
+        onClose={() => setGuidePlatform(null)}
+        title={`Connect ${guidePlatform?.name || "Social Account"}`}
+        size="md"
+      >
+        <div style={{ padding: "4px 0" }}>
+          <p style={{ fontSize: 13, color: "var(--dark)", lineHeight: 1.5, margin: "0 0 14px" }}>
+            To connect this brand social account, we recommend using an <strong>Incognito / Private Window</strong> so active personal logins do not interfere.
+          </p>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, background: "#F3F4F6", padding: 14, borderRadius: 8, border: "1px solid var(--border)", marginBottom: 16 }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: "50%", background: "var(--primary)", color: "#fff", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>1</span>
+              <p style={{ fontSize: 12.5, color: "var(--dark)", margin: 0 }}>Copy the authorization link below.</p>
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 20, height: 20, borderRadius: "50%", background: "var(--primary)", color: "#fff", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>2</span>
+              <p style={{ fontSize: 12.5, color: "var(--dark)", margin: 0 }}>Paste it in an <strong>Incognito window</strong> and log into the client's account.</p>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: "var(--muted)" }}>Authorization Link:</span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="text"
+                readOnly
+                value={guidePlatform?.url || ""}
+                style={{ flex: 1, padding: "8px 12px", background: "#F9FAFB", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12, color: "var(--muted)" }}
+                onClick={(e) => e.target.select()}
+              />
+              <Btn
+                variant={copied ? "success" : "outline"}
+                size="sm"
+                onClick={async () => {
+                  if (guidePlatform?.url) {
+                    try {
+                      await navigator.clipboard.writeText(guidePlatform.url);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    } catch (err) {
+                      const input = document.createElement("input");
+                      input.value = guidePlatform.url;
+                      document.body.appendChild(input);
+                      input.select();
+                      document.execCommand("copy");
+                      document.body.removeChild(input);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
+                    }
+                  }
+                }}
+                style={{ whiteSpace: "nowrap" }}
+              >
+                {copied ? "✓ Copied" : "Copy Link"}
+              </Btn>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", borderTop: "1px solid var(--border)", paddingTop: 14 }}>
+            <Btn variant="ghost" size="sm" onClick={() => setGuidePlatform(null)}>
+              Cancel
+            </Btn>
+            <Btn variant="primary" size="sm" onClick={() => {
+              if (guidePlatform?.url) {
+                window.location.href = guidePlatform.url;
+              }
+            }}>
+              Open Directly (Regular Window)
+            </Btn>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

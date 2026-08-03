@@ -3,15 +3,18 @@ import prisma from "../config/prisma.js";
 // GET /api/social/connections
 export const getSocialConnections = async (req, res) => {
     try {
-        const clientId = req.user.id;
+        let clientId = req.user.id;
+        if ((req.user.role === "SUPER_ADMIN" || req.user.role === "MANAGER") && req.query.clientId) {
+            clientId = req.query.clientId;
+        }
 
-        // Verify that user is a client
+        // Verify that target client exists
         const client = await prisma.client.findUnique({
             where: { id: clientId }
         });
 
         if (!client) {
-            return res.status(403).json({ success: false, message: "Only clients can access social connection metadata" });
+            return res.status(404).json({ success: false, message: "Client not found" });
         }
 
         const connections = await prisma.socialConnection.findMany({
@@ -69,7 +72,7 @@ export const getSocialConnections = async (req, res) => {
 export const disconnectFacebook = async (req, res) => {
     try {
         let clientId = req.user.id;
-        if ((req.user.role === "SUPER_ADMIN" || req.user.role === "MANAGER") && req.query.clientId) {
+        if (req.query.clientId && req.user.role !== "CLIENT") {
             clientId = req.query.clientId;
         }
         await prisma.socialConnection.deleteMany({
@@ -89,7 +92,7 @@ export const disconnectFacebook = async (req, res) => {
 export const disconnectInstagram = async (req, res) => {
     try {
         let clientId = req.user.id;
-        if ((req.user.role === "SUPER_ADMIN" || req.user.role === "MANAGER") && req.query.clientId) {
+        if (req.query.clientId && req.user.role !== "CLIENT") {
             clientId = req.query.clientId;
         }
         await prisma.socialConnection.deleteMany({
@@ -109,7 +112,7 @@ export const disconnectInstagram = async (req, res) => {
 export const disconnectPlatform = async (req, res) => {
     try {
         let clientId = req.user.id;
-        if ((req.user.role === "SUPER_ADMIN" || req.user.role === "MANAGER") && req.query.clientId) {
+        if (req.query.clientId && req.user.role !== "CLIENT") {
             clientId = req.query.clientId;
         }
         const { platform } = req.params;

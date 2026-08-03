@@ -465,9 +465,17 @@ export const retryPublishingJob = async (id, companyId, loggedInUser) => {
  * Get client's social connection status
  */
 export const getSocialStatus = async (clientId, companyId) => {
-    const client = await prisma.client.findFirst({
-        where: { id: clientId, companyId },
-    });
+    let client = null;
+    if (companyId) {
+        client = await prisma.client.findFirst({
+            where: { id: clientId, companyId },
+        });
+    }
+    if (!client) {
+        client = await prisma.client.findUnique({
+            where: { id: clientId },
+        });
+    }
 
     if (!client) {
         throw new Error("Client not found");

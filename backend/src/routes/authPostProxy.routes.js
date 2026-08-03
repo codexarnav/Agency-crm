@@ -33,7 +33,7 @@ router.get("/postproxy/connect", async (req, res) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         let clientId = decoded.id;
 
-        if ((decoded.role === "SUPER_ADMIN" || decoded.role === "MANAGER") && req.query.clientId) {
+        if (req.query.clientId && decoded.role !== "CLIENT") {
             clientId = req.query.clientId;
             isAgent = true;
         }
@@ -59,7 +59,7 @@ router.get("/postproxy/connect", async (req, res) => {
                 // Fetch all existing profile groups from PostProxy to see if there's an existing match or fallback
                 console.log("Fetching existing PostProxy profile groups...");
                 const existingGroups = await getProfileGroups();
-                
+
                 const targetName = (client.companyName || client.brandName || "").trim().toLowerCase();
                 let matchedGroup = null;
                 if (targetName) {
@@ -77,7 +77,7 @@ router.get("/postproxy/connect", async (req, res) => {
                         groupId = newGroup.id;
                     } catch (createError) {
                         console.warn("⚠️ Failed to create PostProxy profile group, checking for fallback:", createError.message);
-                        
+
                         // Fallback logic: check if any existing group can be used
                         if (existingGroups.length > 0) {
                             // Look for "Default" group, or just use the first available group
@@ -148,29 +148,58 @@ router.get("/postproxy/callback", async (req, res) => {
 
         const groupId = client.postproxyGroupId;
 
+        const normalizePlatform = (p) => {
+            if (!p) return "";
+            const lower = p.toLowerCase().trim();
+            if (lower.includes("facebook") || lower.includes("fb")) return "facebook";
+            if (lower.includes("instagram") || lower.includes("ig")) return "instagram";
+            if (lower.includes("linkedin")) return "linkedin";
+            if (lower.includes("youtube") || lower.includes("google") || lower.includes("yt")) return "youtube";
+            if (lower.includes("twitter") || lower.includes("x") || lower === "x" || lower.startsWith("x_") || lower.startsWith("x-")) return "twitter";
+            if (lower.includes("tiktok") || lower.includes("tt")) return "tiktok";
+            return lower;
+        };
+
         // Fetch all connected profiles for this group from PostProxy
         console.log(`Fetching PostProxy profiles for client: ${client.companyName || client.brandName} (group: ${groupId})`);
-        const profiles = await getProfiles(groupId);
+        let profiles = await getProfiles(groupId);
+
+        // Retry logic if PostProxy is still finalizing profile creation on redirect
+        if (profiles.length === 0) {
+            for (let i = 0; i < 3; i++) {
+                console.log(`⚠️ Profiles empty, retrying PostProxy getProfiles (attempt ${i + 1}/3)...`);
+                await new Promise(r => setTimeout(r, 1000));
+                profiles = await getProfiles(groupId);
+                if (profiles.length > 0) break;
+            }
+        }
+
+        // Check if callback query params contain explicit profile data
+        const queryPlatform = req.query.platform || req.query.provider || req.query.type;
+        const queryProfileId = req.query.profile_id || req.query.profileId || req.query.id;
+        const queryUsername = req.query.username || req.query.name || req.query.handle;
+
+        if (queryPlatform && queryProfileId) {
+            const alreadyExists = profiles.some(p => String(p.id) === String(queryProfileId));
+            if (!alreadyExists) {
+                profiles.push({
+                    id: queryProfileId,
+                    platform: queryPlatform,
+                    username: queryUsername || "",
+                    name: queryUsername || ""
+                });
+            }
+        }
 
         if (profiles.length === 0) {
             console.warn("⚠️ No connected profiles returned from PostProxy for group:", groupId);
         }
 
-        const normalizePlatform = (p) => {
-            if (!p) return "";
-            const lower = p.toLowerCase();
-            if (lower.includes("facebook")) return "facebook";
-            if (lower.includes("instagram")) return "instagram";
-            if (lower.includes("linkedin")) return "linkedin";
-            if (lower.includes("youtube") || lower.includes("google")) return "youtube";
-            if (lower.includes("twitter") || lower === "x") return "twitter";
-            if (lower.includes("tiktok")) return "tiktok";
-            return lower;
-        };
-
         // Synchronize profiles in database
         for (const profile of profiles) {
             const platformKey = normalizePlatform(profile.platform);
+            if (!platformKey) continue;
+
             await prisma.socialConnection.upsert({
                 where: {
                     clientId_platform: {
@@ -179,14 +208,14 @@ router.get("/postproxy/callback", async (req, res) => {
                     }
                 },
                 update: {
-                    postproxyProfileId: profile.id,
+                    postproxyProfileId: String(profile.id),
                     profileName: profile.username || profile.name || "",
                     profileGroupId: groupId
                 },
                 create: {
                     clientId: clientId,
                     platform: platformKey,
-                    postproxyProfileId: profile.id,
+                    postproxyProfileId: String(profile.id),
                     profileName: profile.username || profile.name || "",
                     profileGroupId: groupId
                 }
