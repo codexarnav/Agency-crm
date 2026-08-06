@@ -158,7 +158,7 @@ router.get("/postproxy/connect", async (req, res) => {
                 // Fetch all existing profile groups from PostProxy to see if there's an existing match or fallback
                 console.log("Fetching existing PostProxy profile groups...");
                 const existingGroups = await getProfileGroups();
-                
+
                 const targetName = (client.companyName || client.brandName || "").trim().toLowerCase();
                 let matchedGroup = null;
                 if (targetName) {
@@ -176,7 +176,7 @@ router.get("/postproxy/connect", async (req, res) => {
                         groupId = newGroup.id;
                     } catch (createError) {
                         console.warn("⚠️ Failed to create PostProxy profile group, checking for fallback:", createError.message);
-                        
+
                         // Fallback logic: check if any existing group can be used
                         if (existingGroups.length > 0) {
                             // Look for "Default" group, or just use the first available group
