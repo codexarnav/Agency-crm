@@ -130,18 +130,25 @@ router.get("/postproxy/connect", async (req, res) => {
 
         let groupId = client.postproxyGroupId;
 
-        // Validate that the stored group ID actually exists on PostProxy.
-        // Profile groups can become stale if the PostProxy account was reset/recreated.
-        if (groupId) {
-            try {
-                console.log(`[PostProxy Connect] Validating stored group ID: ${groupId}`);
-                await getProfiles(groupId); // This will throw if the group doesn't exist
-                console.log(`[PostProxy Connect] ✅ Group ${groupId} is valid`);
-            } catch (validationErr) {
-                console.warn(`[PostProxy Connect] ⚠️ Stored group ID ${groupId} is STALE/INVALID: ${validationErr.message}`);
-                console.warn(`[PostProxy Connect] Clearing stale group ID and creating a fresh one...`);
+        // Fetch existing profile groups from PostProxy
+        const existingGroups = await getProfileGroups();
+        const clientName = (client.companyName || client.brandName || "").trim().toLowerCase();
+        const matchedGroupByName = clientName ? existingGroups.find(g => (g.name || "").trim().toLowerCase() === clientName) : null;
+
+        if (matchedGroupByName && matchedGroupByName.id !== groupId) {
+            console.log(`[PostProxy Connect] Found matching group for "${client.companyName || client.brandName}": ${matchedGroupByName.id}. Updating client.`);
+            groupId = matchedGroupByName.id;
+            await prisma.client.update({
+                where: { id: clientId },
+                data: { postproxyGroupId: groupId }
+            });
+        } else if (groupId) {
+            // Validate that the stored group ID actually exists on PostProxy
+            const groupExists = existingGroups.some(g => g.id === groupId);
+            if (!groupExists) {
+                console.warn(`[PostProxy Connect] ⚠️ Stored group ID ${groupId} is STALE/INVALID (not found in PostProxy profile groups).`);
+                console.warn(`[PostProxy Connect] Clearing stale group ID...`);
                 groupId = null;
-                // Clear the stale group ID and any stale social connections
                 await prisma.client.update({
                     where: { id: clientId },
                     data: { postproxyGroupId: null }
@@ -152,45 +159,28 @@ router.get("/postproxy/connect", async (req, res) => {
             }
         }
 
-        // If client doesn't have a valid PostProxy profile group, create or find one
+        // If client still doesn't have a valid PostProxy profile group, create or find one
         if (!groupId) {
             try {
-                // Fetch all existing profile groups from PostProxy to see if there's an existing match or fallback
-                console.log("Fetching existing PostProxy profile groups...");
-                const existingGroups = await getProfileGroups();
-
-                const targetName = (client.companyName || client.brandName || "").trim().toLowerCase();
-                let matchedGroup = null;
-                if (targetName) {
-                    matchedGroup = existingGroups.find(g => (g.name || "").trim().toLowerCase() === targetName);
-                }
-
-                if (matchedGroup) {
-                    groupId = matchedGroup.id;
-                    console.log(`Found matching PostProxy profile group: "${matchedGroup.name}" (ID: ${groupId})`);
+                if (matchedGroupByName) {
+                    groupId = matchedGroupByName.id;
                 } else {
-                    // Try to create a new group
-                    console.log(`Creating PostProxy Profile Group for client: ${client.companyName || client.brandName}`);
+                    console.log(`[PostProxy Connect] Creating dedicated PostProxy Profile Group for client: ${client.companyName || client.brandName}`);
                     try {
                         const newGroup = await createProfileGroup(client.companyName || client.brandName || `Client ${clientId}`);
                         groupId = newGroup.id;
                     } catch (createError) {
-                        console.warn("⚠️ Failed to create PostProxy profile group, checking for fallback:", createError.message);
-
-                        // Fallback logic: check if any existing group can be used
-                        if (existingGroups.length > 0) {
-                            // Look for "Default" group, or just use the first available group
-                            const defaultGroup = existingGroups.find(g => (g.name || "").trim().toLowerCase() === "default") || existingGroups[0];
+                        console.warn("⚠️ Failed to create PostProxy profile group (e.g. limit reached):", createError.message);
+                        const defaultGroup = existingGroups.find(g => (g.name || "").trim().toLowerCase() === "default") || existingGroups[0];
+                        if (defaultGroup) {
                             groupId = defaultGroup.id;
-                            console.log(`Fallback: using existing group "${defaultGroup.name}" (ID: ${groupId})`);
+                            console.log(`Fallback: using group "${defaultGroup.name}" (ID: ${groupId})`);
                         } else {
-                            // No groups exist and creation failed, rethrow
                             throw createError;
                         }
                     }
                 }
 
-                // Save the group ID on the client
                 await prisma.client.update({
                     where: { id: clientId },
                     data: { postproxyGroupId: groupId }

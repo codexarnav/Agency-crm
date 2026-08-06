@@ -118,8 +118,8 @@ export const getProfiles = async (groupId) => {
     return profiles.map(p => ({
         id: p.id,
         platform: p.platform,
-        username: p.username || p.name || "",
-        name: p.name || ""
+        username: p.username || p.name || p.page_name || p.title || p.account_name || "",
+        name: p.name || p.username || p.page_name || ""
     }));
 };
 
