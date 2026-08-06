@@ -29,6 +29,10 @@ import { verifyToken } from "../middleware/auth.middleware.js";
 
 const app = express();
 
+// Trust reverse proxy headers (Render, Railway, etc.)
+// This ensures req.protocol correctly reports 'https' behind the proxy
+app.set('trust proxy', 1);
+
 app.use(cors({
     origin: true,
     credentials: true,
