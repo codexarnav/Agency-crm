@@ -153,7 +153,7 @@ async function processSingleJob(job) {
 
     // Notify manager and employee
     const itemTitle = pubJob.title || (pubJob.task ? pubJob.task.title : (pubJob.shoot ? pubJob.shoot.title : "Content"));
-    
+
     // Notify manager
     await createNotification({
       senderId: pubJob.managerId,
@@ -203,7 +203,7 @@ async function processSingleJob(job) {
     if (isLastAttempt) {
       // Notify manager and assignee on final failure
       const itemTitle = pubJob.task ? pubJob.task.title : (pubJob.shoot ? pubJob.shoot.title : "Content");
-      
+
       await createNotification({
         senderId: pubJob.managerId,
         receiverId: pubJob.managerId,
