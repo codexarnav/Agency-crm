@@ -242,21 +242,33 @@ router.get("/postproxy/callback", async (req, res) => {
         const groupId = client.postproxyGroupId;
 
         // Fetch all connected profiles for this group from PostProxy
-        // Add retry logic — PostProxy may need a moment to finalize the profile after OAuth
+        // Use retry logic with increasing delays — PostProxy may need time to finalize the profile after OAuth
         console.log(`[PostProxy Callback] Fetching profiles for client: ${client.companyName || client.brandName} (group: ${groupId})`);
-        let profiles = await getProfiles(groupId);
-        console.log(`[PostProxy Callback] First fetch: ${profiles.length} profiles found:`, JSON.stringify(profiles));
-
-        if (profiles.length === 0) {
-            // Retry after a short delay — PostProxy may not have finished processing the OAuth
-            console.log(`[PostProxy Callback] 0 profiles, retrying in 3 seconds...`);
-            await new Promise(r => setTimeout(r, 3000));
+        
+        let profiles = [];
+        const retryDelays = [0, 3000, 5000, 8000]; // immediate, then 3s, 5s, 8s
+        
+        for (let attempt = 0; attempt < retryDelays.length; attempt++) {
+            if (retryDelays[attempt] > 0) {
+                console.log(`[PostProxy Callback] Attempt ${attempt + 1}: waiting ${retryDelays[attempt]}ms before retry...`);
+                await new Promise(r => setTimeout(r, retryDelays[attempt]));
+            }
+            
             profiles = await getProfiles(groupId);
-            console.log(`[PostProxy Callback] Retry fetch: ${profiles.length} profiles found:`, JSON.stringify(profiles));
+            console.log(`[PostProxy Callback] Attempt ${attempt + 1}: ${profiles.length} profiles found:`, JSON.stringify(profiles));
+            
+            if (profiles.length > 0) {
+                break;
+            }
         }
 
         if (profiles.length === 0) {
-            console.warn("⚠️ Still 0 profiles after retry for group:", groupId);
+            console.error("❌ PostProxy OAuth Callback: 0 profiles found after all retries for group:", groupId);
+            console.error("❌ This means PostProxy did not register the OAuth connection. The social account was NOT saved.");
+            if (agent === "true") {
+                return res.redirect(getFrontendRedirectUrl(`clients?error=oauth_failed&clientId=${clientId}`));
+            }
+            return res.redirect(getFrontendRedirectUrl("client/settings/social?error=oauth_failed"));
         }
 
         const normalizePlatform = (p) => {
@@ -274,6 +286,7 @@ router.get("/postproxy/callback", async (req, res) => {
         // Synchronize profiles in database
         for (const profile of profiles) {
             const platformKey = normalizePlatform(profile.platform);
+            console.log(`[PostProxy Callback] Upserting: platform=${platformKey}, profileId=${profile.id}, name=${profile.username || profile.name}`);
             await prisma.socialConnection.upsert({
                 where: {
                     clientId_platform: {
@@ -296,7 +309,12 @@ router.get("/postproxy/callback", async (req, res) => {
             });
         }
 
-        console.log(`✅ PostProxy OAuth Callback Success for Client ${clientId}. Synced ${profiles.length} profiles.`);
+        // Verify the records were actually saved
+        const savedConnections = await prisma.socialConnection.findMany({
+            where: { clientId }
+        });
+        console.log(`✅ PostProxy OAuth Callback Success for Client ${clientId}. Synced ${profiles.length} profiles. DB has ${savedConnections.length} connections.`);
+        
         if (agent === "true") {
             return res.redirect(getFrontendRedirectUrl(`clients?success=true&clientId=${clientId}`));
         }

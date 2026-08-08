@@ -1,5 +1,5 @@
 // Clients Management Page
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useApp } from "../shared/AppContext";
 import { CLIENT_STATUSES, CLIENT_INDUSTRIES, PLATFORM_OPTIONS } from "../shared/constants";
 import {
@@ -794,6 +794,44 @@ function ClientsPage() {
   const [editClient, setEditClient] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
+  
+  // Capture OAuth redirect params on mount (before they get cleared)
+  const oauthParamsRef = useRef(null);
+  const oauthHandledRef = useRef(false);
+  
+  // Capture URL params once on mount
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const success = searchParams.get("success");
+    const error = searchParams.get("error");
+    const connectedClientId = searchParams.get("clientId");
+    
+    if (success === "true" || error === "oauth_failed") {
+      oauthParamsRef.current = { success, error, connectedClientId };
+      window.history.replaceState({}, document.title, window.location.pathname);
+      
+      if (success === "true") {
+        showToast("Social account connected successfully!", "success");
+        refreshClients();
+      } else if (error === "oauth_failed") {
+        showToast("Failed to connect social account.", "danger");
+      }
+    }
+  }, []);
+  
+  // Once clients are loaded, open the drawer for the connected client
+  useEffect(() => {
+    if (oauthHandledRef.current || !oauthParamsRef.current) return;
+    const { success, connectedClientId } = oauthParamsRef.current;
+    
+    if (success === "true" && connectedClientId && clients.length > 0) {
+      const found = clients.find(c => c.id === connectedClientId);
+      if (found) {
+        setDrawerClient(found);
+        oauthHandledRef.current = true;
+      }
+    }
+  }, [clients]);
 
   useEffect(() => {
     const loadManagers = async () => {
@@ -808,29 +846,6 @@ function ClientsPage() {
       loadManagers();
     }
   }, [role]);
-
-  useEffect(() => {
-    const searchParams = new URLSearchParams(window.location.search);
-    const success = searchParams.get("success");
-    const error = searchParams.get("error");
-    const connectedClientId = searchParams.get("clientId");
-
-    if (success === "true") {
-      showToast("Social account connected successfully!", "success");
-      window.history.replaceState({}, document.title, window.location.pathname);
-      refreshClients();
-      
-      if (connectedClientId) {
-        const found = clients.find(c => c.id === connectedClientId);
-        if (found) {
-          setDrawerClient(found);
-        }
-      }
-    } else if (error === "oauth_failed") {
-      showToast("Failed to connect social account.", "danger");
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  }, [clients]);
 
   const canDelete = role === "superadmin";
   const canAdd = role === "superadmin" || role === "manager";

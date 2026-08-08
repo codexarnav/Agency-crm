@@ -96,12 +96,23 @@ export const initializeConnection = async (groupId, platform, redirectUrl) => {
  */
 export const getProfiles = async (groupId) => {
     const url = `${getBaseUrl()}/api/profiles?profile_group_id=${groupId}`;
+    console.log(`[PostProxy getProfiles] Fetching: ${url}`);
     const response = await fetch(url, {
         method: "GET",
         headers: getHeaders()
     });
 
-    const data = await response.json();
+    const rawText = await response.text();
+    console.log(`[PostProxy getProfiles] Status: ${response.status}, Raw response: ${rawText.substring(0, 1000)}`);
+    
+    let data;
+    try {
+        data = JSON.parse(rawText);
+    } catch (parseErr) {
+        console.error(`[PostProxy getProfiles] Failed to parse JSON:`, parseErr.message);
+        throw new Error(`PostProxy Error: Invalid JSON response (${response.status})`);
+    }
+    
     if (!response.ok) {
         throw new Error(data.message || `PostProxy Error: Failed to fetch profiles (${response.status})`);
     }
@@ -113,7 +124,11 @@ export const getProfiles = async (groupId) => {
         profiles = data.profiles;
     } else if (data && Array.isArray(data.data)) {
         profiles = data.data;
+    } else {
+        console.warn(`[PostProxy getProfiles] Unexpected response structure. Keys: ${Object.keys(data || {}).join(', ')}`);
     }
+
+    console.log(`[PostProxy getProfiles] Parsed ${profiles.length} profiles for group ${groupId}`);
 
     return profiles.map(p => ({
         id: p.id,
