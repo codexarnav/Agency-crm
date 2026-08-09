@@ -193,29 +193,40 @@ export const publishPost = async (profileIds, body, mediaUrls = [], title = null
         media: mediaUrls || []
     };
 
-    // Include title at top-level and in platform-specific options for maximum compatibility
+    // Check if any media URL is a video
+    const isVideoMedia = mediaUrls.some(url => {
+        if (!url || typeof url !== "string") return false;
+        const lower = url.toLowerCase();
+        return lower.endsWith(".mp4") || lower.endsWith(".mov") || lower.endsWith(".webm") || lower.includes("/video/upload/");
+    });
+
+    const isYouTube = platform && platform.toLowerCase() === "youtube";
+
+    // Include title for platforms/media that support video titles (e.g. YouTube or video files)
     if (cleanTitle) {
-        requestBody.title = cleanTitle;
-        requestBody.post_title = cleanTitle;
-        requestBody.video_title = cleanTitle;
-        requestBody.options = {
-            title: cleanTitle,
-            youtube: {
+        if (isYouTube || isVideoMedia) {
+            requestBody.title = cleanTitle;
+            requestBody.post_title = cleanTitle;
+            requestBody.video_title = cleanTitle;
+            requestBody.options = {
                 title: cleanTitle,
-                privacyStatus: "public"
-            },
-            facebook: {
-                title: cleanTitle
-            },
-            instagram: {
-                title: cleanTitle
+                youtube: {
+                    title: cleanTitle,
+                    privacyStatus: "public"
+                }
+            };
+        } else {
+            // For standard image/text posts, use body/caption and omit video-only title parameters
+            if (!body || !body.trim()) {
+                requestBody.body = cleanTitle;
+                requestBody.post.body = cleanTitle;
             }
-        };
+        }
     }
 
     // Also include top-level body for APIs that require it
-    if (body) {
-        requestBody.body = body;
+    if (body && body.trim()) {
+        requestBody.body = body.trim();
     }
 
     console.log("Posting to PostProxy API:", JSON.stringify(requestBody, null, 2));
