@@ -95,46 +95,71 @@ export const initializeConnection = async (groupId, platform, redirectUrl) => {
  * @returns {Promise<Array<{id: string, platform: string, username: string, name: string}>>}
  */
 export const getProfiles = async (groupId) => {
-    const url = `${getBaseUrl()}/api/profiles?profile_group_id=${groupId}`;
-    console.log(`[PostProxy getProfiles] Fetching: ${url}`);
-    const response = await fetch(url, {
-        method: "GET",
-        headers: getHeaders()
-    });
-
-    const rawText = await response.text();
-    console.log(`[PostProxy getProfiles] Status: ${response.status}, Raw response: ${rawText.substring(0, 1000)}`);
-    
-    let data;
-    try {
-        data = JSON.parse(rawText);
-    } catch (parseErr) {
-        console.error(`[PostProxy getProfiles] Failed to parse JSON:`, parseErr.message);
-        throw new Error(`PostProxy Error: Invalid JSON response (${response.status})`);
-    }
-    
-    if (!response.ok) {
-        throw new Error(data.message || `PostProxy Error: Failed to fetch profiles (${response.status})`);
-    }
-
     let profiles = [];
-    if (Array.isArray(data)) {
-        profiles = data;
-    } else if (data && Array.isArray(data.profiles)) {
-        profiles = data.profiles;
-    } else if (data && Array.isArray(data.data)) {
-        profiles = data.data;
-    } else {
-        console.warn(`[PostProxy getProfiles] Unexpected response structure. Keys: ${Object.keys(data || {}).join(', ')}`);
+    
+    // 1. Try with profile_group_id query parameter
+    if (groupId) {
+        const url = `${getBaseUrl()}/api/profiles?profile_group_id=${groupId}`;
+        console.log(`[PostProxy getProfiles] Fetching by profile_group_id: ${url}`);
+        try {
+            const response = await fetch(url, {
+                method: "GET",
+                headers: getHeaders()
+            });
+            const rawText = await response.text();
+            console.log(`[PostProxy getProfiles] Status: ${response.status}, Response snippet: ${rawText.substring(0, 500)}`);
+            if (response.ok) {
+                const data = JSON.parse(rawText);
+                let list = Array.isArray(data) ? data : (data.profiles || data.data || []);
+                if (Array.isArray(list) && list.length > 0) {
+                    profiles = list;
+                }
+            }
+        } catch (err) {
+            console.warn(`[PostProxy getProfiles] Warning when fetching by profile_group_id:`, err.message);
+        }
     }
 
-    console.log(`[PostProxy getProfiles] Parsed ${profiles.length} profiles for group ${groupId}`);
+    // 2. Fallback: If no profiles found yet, fetch ALL profiles in the PostProxy account
+    if (profiles.length === 0) {
+        const allUrl = `${getBaseUrl()}/api/profiles`;
+        console.log(`[PostProxy getProfiles] Fallback: Fetching ALL profiles: ${allUrl}`);
+        try {
+            const response = await fetch(allUrl, {
+                method: "GET",
+                headers: getHeaders()
+            });
+            const rawText = await response.text();
+            console.log(`[PostProxy getProfiles] All profiles status: ${response.status}, Response snippet: ${rawText.substring(0, 500)}`);
+            if (response.ok) {
+                const data = JSON.parse(rawText);
+                let list = Array.isArray(data) ? data : (data.profiles || data.data || []);
+                if (Array.isArray(list) && list.length > 0) {
+                    if (groupId) {
+                        // Filter list for matching group ID (supports profile_group_id, group_id, or nested profile_group.id)
+                        const matched = list.filter(p => {
+                            const pGroupId = p.profile_group_id || p.group_id || p.profile_group?.id;
+                            return !pGroupId || pGroupId === groupId;
+                        });
+                        profiles = matched.length > 0 ? matched : list;
+                    } else {
+                        profiles = list;
+                    }
+                }
+            }
+        } catch (err) {
+            console.error(`[PostProxy getProfiles] Fallback fetch error:`, err.message);
+        }
+    }
+
+    console.log(`[PostProxy getProfiles] Final parsed profiles count: ${profiles.length} for group ${groupId || 'ALL'}`);
 
     return profiles.map(p => ({
         id: p.id,
         platform: p.platform,
         username: p.username || p.name || p.page_name || p.title || p.account_name || "",
-        name: p.name || p.username || p.page_name || ""
+        name: p.name || p.username || p.page_name || "",
+        profileGroupId: p.profile_group_id || p.group_id || p.profile_group?.id || groupId || ""
     }));
 };
 

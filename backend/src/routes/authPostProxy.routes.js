@@ -54,6 +54,14 @@ router.get("/postproxy/debug", async (req, res) => {
             diagnostics.postproxy.apiReachable = true;
             diagnostics.postproxy.profileGroups = groups;
 
+            // Fetch all profiles across the entire PostProxy account
+            try {
+                const allProfiles = await getProfiles(null);
+                diagnostics.postproxy.allAccountProfiles = allProfiles;
+            } catch (allErr) {
+                diagnostics.postproxy.allAccountProfilesError = allErr.message;
+            }
+
             // Fetch profiles for each group
             for (const group of groups) {
                 try {
