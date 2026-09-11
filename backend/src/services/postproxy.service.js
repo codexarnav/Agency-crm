@@ -175,10 +175,11 @@ export const getProfiles = async (groupId) => {
 export const publishPost = async (profileIds, body, mediaUrls = [], title = null, platform = null) => {
     const url = `${getBaseUrl()}/api/posts`;
     const cleanTitle = title && title.trim() ? title.trim() : null;
+    const cleanBody = body && body.trim() ? body.trim() : (cleanTitle || "");
 
-    // Post body payload
+    // 1. Post body payload (Universal caption / YouTube description)
     const postPayload = {
-        body: body || ""
+        body: cleanBody
     };
     if (cleanTitle) {
         postPayload.title = cleanTitle;
@@ -186,47 +187,80 @@ export const publishPost = async (profileIds, body, mediaUrls = [], title = null
         postPayload.headline = cleanTitle;
     }
 
-    // Top-level payload structure for PostProxy
+    // 2. Request body structure for PostProxy
     const requestBody = {
         post: postPayload,
         profiles: profileIds,
-        media: mediaUrls || []
+        media: mediaUrls || [],
+        platforms: {}
     };
 
+    // Also include top-level body & title for API compatibility
+    if (cleanBody) {
+        requestBody.body = cleanBody;
+    }
+    if (cleanTitle) {
+        requestBody.title = cleanTitle;
+        requestBody.post_title = cleanTitle;
+        requestBody.video_title = cleanTitle;
+    }
+
     // Check if any media URL is a video
-    const isVideoMedia = mediaUrls.some(url => {
+    const isVideoMedia = (mediaUrls || []).some(url => {
         if (!url || typeof url !== "string") return false;
         const lower = url.toLowerCase();
         return lower.endsWith(".mp4") || lower.endsWith(".mov") || lower.endsWith(".webm") || lower.includes("/video/upload/");
     });
 
-    const isYouTube = platform && platform.toLowerCase() === "youtube";
+    const normPlatform = (platform || "").toLowerCase();
+    const isYouTube = normPlatform.includes("youtube") || normPlatform.includes("google");
+    const isTikTok = normPlatform.includes("tiktok");
+    const isPinterest = normPlatform.includes("pinterest");
+    const isFacebook = normPlatform.includes("facebook");
 
-    // Include title for platforms/media that support video titles (e.g. YouTube or video files)
+    // 3. Platform-specific configurations for PostProxy
     if (cleanTitle) {
+        // YouTube requires title under platforms.youtube with max 100 characters and snake_case privacy_status
+        const safeYouTubeTitle = cleanTitle.length > 100 ? cleanTitle.substring(0, 97) + "..." : cleanTitle;
         if (isYouTube || isVideoMedia) {
-            requestBody.title = cleanTitle;
-            requestBody.post_title = cleanTitle;
-            requestBody.video_title = cleanTitle;
+            requestBody.platforms.youtube = {
+                title: safeYouTubeTitle,
+                privacy_status: "public"
+            };
+        }
+
+        // TikTok video title / caption (max 150 characters)
+        if (isTikTok) {
+            requestBody.platforms.tiktok = {
+                title: cleanTitle.length > 150 ? cleanTitle.substring(0, 147) + "..." : cleanTitle
+            };
+        }
+
+        // Pinterest pin title (max 100 characters)
+        if (isPinterest) {
+            requestBody.platforms.pinterest = {
+                title: cleanTitle.length > 100 ? cleanTitle.substring(0, 97) + "..." : cleanTitle
+            };
+        }
+
+        // Facebook video title
+        if (isFacebook && isVideoMedia) {
+            requestBody.platforms.facebook = {
+                title: cleanTitle
+            };
+        }
+
+        // Retain options object for legacy adapters
+        if (isYouTube || isVideoMedia) {
             requestBody.options = {
-                title: cleanTitle,
+                title: safeYouTubeTitle,
                 youtube: {
-                    title: cleanTitle,
+                    title: safeYouTubeTitle,
+                    privacy_status: "public",
                     privacyStatus: "public"
                 }
             };
-        } else {
-            // For standard image/text posts, use body/caption and omit video-only title parameters
-            if (!body || !body.trim()) {
-                requestBody.body = cleanTitle;
-                requestBody.post.body = cleanTitle;
-            }
         }
-    }
-
-    // Also include top-level body for APIs that require it
-    if (body && body.trim()) {
-        requestBody.body = body.trim();
     }
 
     console.log("Posting to PostProxy API:", JSON.stringify(requestBody, null, 2));

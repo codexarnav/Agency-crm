@@ -99,9 +99,9 @@ async function processSingleJob(job) {
 
     // Fallbacks to ensure platforms like YouTube (which require a video title) never receive an empty title
     if (!postTitle && postBody) {
-      // Use the first line or first 80 chars of caption as the title fallback
+      // Use the first line or first 100 chars of caption as the title fallback
       const firstLine = postBody.split("\n")[0].trim();
-      postTitle = firstLine.length > 80 ? firstLine.substring(0, 77) + "..." : firstLine;
+      postTitle = firstLine.length > 100 ? firstLine.substring(0, 97) + "..." : firstLine;
     }
 
     if (!postBody && postTitle) {

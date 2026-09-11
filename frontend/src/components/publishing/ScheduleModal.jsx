@@ -10,6 +10,7 @@ export default function ScheduleModal({ open, onClose, task, shoot, onSuccess })
     const [selectedPlatforms, setSelectedPlatforms] = useState([]);
     const [loading, setLoading] = useState(false);
     
+    const [title, setTitle] = useState("");
     const [caption, setCaption] = useState("");
     const [mediaUrls, setMediaUrls] = useState("");
     const [date, setDate] = useState("");
@@ -22,9 +23,11 @@ export default function ScheduleModal({ open, onClose, task, shoot, onSuccess })
 
     useEffect(() => {
         if (task) {
+            setTitle(task.title || "");
             setCaption(task.captionCopy || "");
             setMediaUrls(task.contentLink || "");
         } else if (shoot) {
+            setTitle(shoot.title || "");
             setCaption(shoot.title || "");
             setMediaUrls(shoot.shootDraftUrl || "");
         }
@@ -109,7 +112,7 @@ export default function ScheduleModal({ open, onClose, task, shoot, onSuccess })
         try {
             const payload = {
                 platforms: selectedPlatforms,
-                title: task?.title || shoot?.title || "",
+                title: (title || task?.title || shoot?.title || "").trim(),
                 caption,
                 mediaUrls,
                 scheduledAt: scheduledAt.toISOString(),
@@ -227,6 +230,18 @@ export default function ScheduleModal({ open, onClose, task, shoot, onSuccess })
                             ) : (
                                 <div style={{ fontSize: 12, color: "var(--danger)" }}>Could not verify client connections. Connect them in Client Settings.</div>
                             )}
+                        </div>
+
+                        <div>
+                            <label style={{ display: "block", fontSize: 12.5, fontWeight: 700, color: "var(--dark)", marginBottom: 6 }}>Post Title / Video Headline</label>
+                            <input 
+                                type="text"
+                                value={title} 
+                                onChange={(e) => setTitle(e.target.value)} 
+                                className="form-input" 
+                                style={{ width: "100%", borderRadius: 8, fontSize: 13, padding: "8px 12px" }}
+                                placeholder="Enter post/video title (used for YouTube & video channels)..."
+                            />
                         </div>
 
                         <div>
