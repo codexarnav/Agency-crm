@@ -1,6 +1,11 @@
 import { useState, useEffect } from "react";
 import { useApp } from "../shared/AppContext";
-import { getSocialConnections, getToken, disconnectPlatform } from "../services/api";
+import {
+  beginSocialConnection,
+  disconnectPlatform,
+  getSocialConnections,
+  syncSocialConnection,
+} from "../services/api";
 import { Btn, Modal } from "../shared/components";
 
 const SUPPORTED_PLATFORMS = [
@@ -18,6 +23,7 @@ function ClientSocialOnboardingPage() {
   const [loading, setLoading] = useState(true);
   const [guidePlatform, setGuidePlatform] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const fetchConnections = async () => {
     try {
@@ -53,32 +59,48 @@ function ClientSocialOnboardingPage() {
     }
   }, []);
 
-  const handleConnect = (platformKey) => {
+  const handleConnect = async (platformKey) => {
     const platform = SUPPORTED_PLATFORMS.find(p => p.key === platformKey);
     if (!platform) return;
-
-    let backendHost = "";
-    const apiEnv = import.meta.env.VITE_API_URL;
-    if (apiEnv) {
-      backendHost = apiEnv.replace(/\/api\/?$/, "").replace(/\/$/, "");
-    } else {
-      backendHost = "http://localhost:5000";
+    try {
+      setLoading(true);
+      const response = await beginSocialConnection(platformKey);
+      setGuidePlatform({
+        key: platformKey,
+        name: platform.name,
+        url: response.data.url,
+        connectionToken: response.data.connectionToken,
+      });
+      setCopied(false);
+    } catch (error) {
+      console.error(error);
+      showToast(error.message || `Failed to start ${platform.name} connection.`, "danger");
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const token = getToken();
-    if (!token) {
-      showToast("Session expired. Please log in again.", "danger");
-      return;
+  const handleSync = async () => {
+    if (!guidePlatform) return;
+    try {
+      setSyncing(true);
+      const response = await syncSocialConnection(
+        guidePlatform.key,
+        guidePlatform.connectionToken
+      );
+      if (response.success) {
+        showToast(`${guidePlatform.name} connected successfully!`, "success");
+        setGuidePlatform(null);
+        await fetchConnections();
+      } else {
+        showToast(response.message || "Complete the Postiz authorization first, then try again.", "warning");
+      }
+    } catch (error) {
+      console.error(error);
+      showToast(error.message || `Failed to sync ${guidePlatform.name}.`, "danger");
+    } finally {
+      setSyncing(false);
     }
-
-    const connectionUrl = `${backendHost}/auth/postproxy/connect?token=${token}&platform=${platformKey}`;
-
-    setGuidePlatform({
-      key: platformKey,
-      name: platform.name,
-      url: connectionUrl
-    });
-    setCopied(false);
   };
 
   const handleDisconnect = async (platformKey, platformName) => {
@@ -207,19 +229,19 @@ function ClientSocialOnboardingPage() {
             <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
               <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", background: "var(--primary)", color: "#fff", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>1</span>
               <p style={{ fontSize: 13, color: "var(--dark)", margin: 0 }}>
-                Click <strong>"Copy Connection Link"</strong> below to copy the auth URL.
+                Open the Postiz authorization link below in a separate window.
               </p>
             </div>
             <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
               <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", background: "var(--primary)", color: "#fff", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>2</span>
               <p style={{ fontSize: 13, color: "var(--dark)", margin: 0 }}>
-                Open a new <strong>Incognito / Private Window</strong> in this browser.
+                Sign in to the business social account and approve access.
               </p>
             </div>
             <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
               <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", background: "var(--primary)", color: "#fff", fontSize: 11, fontWeight: 700, flexShrink: 0 }}>3</span>
               <p style={{ fontSize: 13, color: "var(--dark)", margin: 0 }}>
-                Paste the copied URL in the address bar and log in manually with your business account.
+                Return here and click <strong>"Check Connection"</strong> to bind the new channel to this CRM client.
               </p>
             </div>
           </div>
@@ -270,12 +292,15 @@ function ClientSocialOnboardingPage() {
             <Btn variant="ghost" size="sm" onClick={() => setGuidePlatform(null)}>
               Cancel
             </Btn>
-            <Btn variant="primary" size="sm" onClick={() => {
+            <Btn variant="outline" size="sm" onClick={() => {
               if (guidePlatform?.url) {
-                window.location.href = guidePlatform.url;
+                window.open(guidePlatform.url, "_blank", "noopener,noreferrer");
               }
             }}>
-              Open Directly (Regular Window)
+              Open Postiz Authorization
+            </Btn>
+            <Btn variant="primary" size="sm" disabled={syncing} onClick={handleSync}>
+              {syncing ? "Checking..." : "Check Connection"}
             </Btn>
           </div>
         </div>

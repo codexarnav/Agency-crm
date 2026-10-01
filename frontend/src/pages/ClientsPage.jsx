@@ -6,7 +6,16 @@ import {
   SvgIcon, Btn, Avatar, EmptyState, SearchBar,
   Modal, FormInput, DataTable, ProgressBar, InfoRow,
 } from "../shared/components";
-import { createClient as apiCreateClient, updateClient, deleteClient, getManagers, getClientSocialConnection, getToken, disconnectPlatform } from "../services/api";
+import {
+  beginSocialConnection,
+  createClient as apiCreateClient,
+  deleteClient,
+  disconnectPlatform,
+  getClientSocialConnection,
+  getManagers,
+  syncSocialConnection,
+  updateClient,
+} from "../services/api";
 
 // Client helpers
 function clientStatusMeta(status) {
@@ -22,6 +31,7 @@ function clientStatusMeta(status) {
 function SocialConnectionsSection({ clientId, showToast }) {
   const [connections, setConnections] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [pendingConnections, setPendingConnections] = useState({});
 
   const fetchConnections = async () => {
     try {
@@ -43,23 +53,48 @@ function SocialConnectionsSection({ clientId, showToast }) {
     }
   }, [clientId]);
 
-  const handleConnect = (platformKey) => {
-    let backendHost = "";
-    const apiEnv = import.meta.env.VITE_API_URL;
-    if (apiEnv) {
-      backendHost = apiEnv.replace(/\/api\/?$/, "").replace(/\/$/, "");
-    } else {
-      backendHost = "http://localhost:5000";
+  const handleConnect = async (platformKey) => {
+    try {
+      setLoading(true);
+      const response = await beginSocialConnection(platformKey, clientId);
+      setPendingConnections(current => ({
+        ...current,
+        [platformKey]: response.data.connectionToken,
+      }));
+      window.open(response.data.url, "_blank", "noopener,noreferrer");
+      showToast("Complete authorization in the new tab, then click Sync.", "info");
+    } catch (error) {
+      console.error(error);
+      showToast(error.message || "Failed to start Postiz authorization.", "danger");
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const token = getToken();
-    if (!token) {
-      showToast("Session expired. Please log in again.", "danger");
-      return;
+  const handleSync = async (platformKey, platformName) => {
+    try {
+      setLoading(true);
+      const response = await syncSocialConnection(
+        platformKey,
+        pendingConnections[platformKey]
+      );
+      if (response.success) {
+        setPendingConnections(current => {
+          const next = { ...current };
+          delete next[platformKey];
+          return next;
+        });
+        showToast(`${platformName} connected successfully!`, "success");
+        await fetchConnections();
+      } else {
+        showToast(response.message || "Complete authorization first, then try Sync again.", "warning");
+      }
+    } catch (error) {
+      console.error(error);
+      showToast(error.message || `Failed to sync ${platformName}.`, "danger");
+    } finally {
+      setLoading(false);
     }
-
-    const connectionUrl = `${backendHost}/auth/postproxy/connect?token=${token}&platform=${platformKey}&clientId=${clientId}`;
-    window.location.href = connectionUrl;
   };
 
   const handleDisconnect = async (platformKey, platformName) => {
@@ -117,6 +152,14 @@ function SocialConnectionsSection({ clientId, showToast }) {
                 style={{ background: "transparent", border: "none", color: "var(--danger)", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}
               >
                 Disconnect
+              </button>
+            ) : pendingConnections[platform.key] ? (
+              <button
+                type="button"
+                onClick={() => handleSync(platform.key, platform.name)}
+                style={{ background: "transparent", border: "none", color: "var(--primary)", fontSize: 11.5, fontWeight: 700, cursor: "pointer" }}
+              >
+                Sync
               </button>
             ) : (
               <button 

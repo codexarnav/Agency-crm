@@ -276,7 +276,7 @@ model Client {
   reports        Report[]
   asset          Asset?
   metaConnection MetaConnection?
-  postproxyGroupId   String?
+  postizGroupId      String?
   socialConnections  SocialConnection[]
   shoots         Shoot[]
   publishingJobs PublishingJob[]
@@ -697,9 +697,9 @@ model SocialConnection {
   clientId            String
   client              Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   platform            String                 // "instagram", "facebook", "youtube", etc.
-  postproxyProfileId  String                 // PostProxy's profile identifier
+  postizIntegrationId String?   @unique      // Postiz integration/channel identifier
   profileName         String?                // Display name (e.g., "@brandname")
-  profileGroupId      String                 // PostProxy profile group ID
+  postizGroupId       String?                // Optional Postiz customer group ID
   connectedAt         DateTime @default(now())
   updatedAt           DateTime @updatedAt
 

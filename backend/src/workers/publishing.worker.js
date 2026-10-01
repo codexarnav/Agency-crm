@@ -1,6 +1,6 @@
 import { boss } from "../config/publishingQueue.js";
 import prisma from "../config/prisma.js";
-import { publishPost } from "../services/postproxy.service.js";
+import { publishPost } from "../services/postiz.service.js";
 import { createNotification } from "../services/notifications.service.js";
 
 async function processSingleJob(job) {
@@ -64,7 +64,7 @@ async function processSingleJob(job) {
 
     const targetPlatform = normalizePlatform(pubJob.platform);
     const socialConns = await prisma.socialConnection.findMany({
-      where: { clientId: pubJob.clientId }
+      where: { clientId: pubJob.clientId, postizIntegrationId: { not: null } }
     });
     const socialConn = socialConns.find(c => normalizePlatform(c.platform) === targetPlatform);
 
@@ -110,9 +110,9 @@ async function processSingleJob(job) {
 
     let externalPostId = null;
 
-    console.log(`Publishing to PostProxy using profile ID: ${socialConn.postproxyProfileId} for platform ${pubJob.platform} with title: "${postTitle}"`);
+    console.log(`Publishing through Postiz using integration ID: ${socialConn.postizIntegrationId} for platform ${pubJob.platform}`);
     const result = await publishPost(
-      [socialConn.postproxyProfileId],
+      socialConn.postizIntegrationId,
       postBody,
       mediaList,
       postTitle,

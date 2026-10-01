@@ -460,6 +460,18 @@ export async function getSocialConnections() {
   return request("GET", "/social/connections");
 }
 
+export async function beginSocialConnection(platform, clientId = null) {
+  return request("POST", `/social/connections/${platform.toLowerCase()}/connect`, {
+    ...(clientId ? { clientId } : {}),
+  });
+}
+
+export async function syncSocialConnection(platform, connectionToken) {
+  return request("POST", `/social/connections/${platform.toLowerCase()}/sync`, {
+    connectionToken,
+  });
+}
+
 export async function disconnectFacebook() {
   return request("DELETE", "/social/connections/facebook");
 }
@@ -472,4 +484,3 @@ export async function disconnectPlatform(platform, clientId = null) {
   const query = clientId ? `?clientId=${clientId}` : "";
   return request("DELETE", `/social/connections/${platform.toLowerCase()}${query}`);
 }
-

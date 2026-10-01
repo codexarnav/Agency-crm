@@ -1,7 +1,7 @@
 import prisma from "../config/prisma.js";
 import { createNotification } from "./notifications.service.js";
 import { addPublishingJob } from "../config/publishingQueue.js";
-import { deletePost as deletePostFromProxy } from "./postproxy.service.js";
+import { deletePost as deletePostFromPostiz } from "./postiz.service.js";
 
 // Helper to notify the assigned employee or creative lead
 const notifyAssignee = async (job, type, content, senderId) => {
@@ -83,7 +83,7 @@ export const schedulePost = async (data, loggedInUser) => {
 
     // 1. Social connection validation before scheduling
     const socialConns = await prisma.socialConnection.findMany({
-        where: { clientId },
+        where: { clientId, postizIntegrationId: { not: null } },
     });
 
     if (socialConns.length === 0) {
@@ -474,7 +474,7 @@ export const getSocialStatus = async (clientId, companyId) => {
     }
 
     const socialConns = await prisma.socialConnection.findMany({
-        where: { clientId },
+        where: { clientId, postizIntegrationId: { not: null } },
     });
 
     const normalizePlatform = (p) => {
@@ -516,7 +516,7 @@ export const getSocialStatus = async (clientId, companyId) => {
 };
 
 /**
- * Delete a publishing job (and delete from Facebook if already published)
+ * Delete a publishing job (and delete the remote Postiz post if already published)
  */
 export const deletePublishingJob = async (id, companyId, loggedInUser) => {
     const job = await prisma.publishingJob.findFirst({
@@ -536,14 +536,14 @@ export const deletePublishingJob = async (id, companyId, loggedInUser) => {
         throw new Error("Access denied: You do not own this publishing job");
     }
 
-    // If already published and we have an external post ID, delete from PostProxy (which deletes from the platform)
+    // If already published and we have an external post ID, delete it through Postiz.
     if (job.status === "PUBLISHED" && job.externalPostId) {
         try {
-            console.log(`Attempting to delete post ${job.externalPostId} via PostProxy API`);
-            await deletePostFromProxy(job.externalPostId, true);
+            console.log(`Attempting to delete post ${job.externalPostId} through Postiz`);
+            await deletePostFromPostiz(job.externalPostId);
             console.log(`Successfully requested deletion for post ${job.externalPostId} on platform`);
         } catch (err) {
-            console.error("Error attempting to delete post via PostProxy:", err);
+            console.error("Error attempting to delete post through Postiz:", err);
         }
     }
 
@@ -566,5 +566,3 @@ export const deletePublishingJob = async (id, companyId, loggedInUser) => {
 
     return deletedJob;
 };
-
-
